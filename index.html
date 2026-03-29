@@ -14,7 +14,18 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;500;700;900&display=swap" rel="stylesheet">
 <style>
-*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;
+  /* 入力欄以外でiOSの長押しメニュー（コピー・選択・貼り付け）を無効化 */
+  -webkit-touch-callout:none;
+  -webkit-user-select:none;
+  user-select:none;
+}
+/* テキスト入力欄は選択・コピー・貼り付けを許可 */
+input,textarea{
+  -webkit-touch-callout:default;
+  -webkit-user-select:text;
+  user-select:text;
+}
 html,body{
   font-family:'M PLUS Rounded 1c',sans-serif;
   background:#F5C842;
@@ -1223,6 +1234,14 @@ document.getElementById('durLock').addEventListener('click',function(e){
   durLocked=!durLocked;
   this.className='dur-lock'+(durLocked?' on':'');
   this.textContent=durLocked?'🔒 固定':'🔓 固定';
+  // 即座にイベントデータに反映して保存
+  if(durPickerIdx!=null){
+    const evs=getEvents();
+    if(evs[durPickerIdx]) {
+      evs[durPickerIdx].durLocked=durLocked;
+      saveToFirestore();
+    }
+  }
 });
 
 function buildDrum(drumEl, items, selectedVal) {
@@ -1495,34 +1514,52 @@ function renderTimelineInto(tl, evs, dayIdx){
 
 document.getElementById('tripName').addEventListener('input', saveToFirestore);
 
+// iOSの長押しメニューを入力欄以外で完全無効化
+document.addEventListener('contextmenu',e=>{
+  if(!e.target.closest('input,textarea')) e.preventDefault();
+});
+
 // ── プルトゥリフレッシュ ─────────────────────────────────
 (function(){
-  const PTR_THRESHOLD=80;
+  const PTR_SHOW=60;    // この距離でインジケーター表示
+  const PTR_COMMIT=160; // この距離で確定（約5cm）
   const ind=document.getElementById('ptr-indicator');
-  let ptStart=null,ptActive=false;
+  let ptStartY=null,ptStartX=null,ptActive=false,ptLocked=false;
+
   document.addEventListener('touchstart',e=>{
-    if(window.scrollY>5)return;
-    ptStart=e.touches[0].clientY;
+    // ピッカーやポップアップが開いていたら無視
+    if(document.getElementById('durPicker').style.display==='block') return;
+    if(document.getElementById('timePopup').style.display==='block') return;
+    if(window.scrollY>5) return;
+    ptStartY=e.touches[0].clientY;
+    ptStartX=e.touches[0].clientX;
     ptActive=false;
+    ptLocked=false;
   },{passive:true});
+
   document.addEventListener('touchmove',e=>{
-    if(ptStart==null||window.scrollY>2)return;
-    const dy=e.touches[0].clientY-ptStart;
-    if(dy<10)return;
+    if(ptStartY==null||window.scrollY>2) return;
+    const dy=e.touches[0].clientY-ptStartY;
+    const dx=Math.abs(e.touches[0].clientX-ptStartX);
+    // 横方向の動きが大きければ水平スワイプなので無視
+    if(!ptLocked && dx>dy*0.6) { ptStartY=null; return; }
+    if(dy<PTR_SHOW) return;
+    ptLocked=true;
     ptActive=true;
-    if(dy>PTR_THRESHOLD){
+    if(dy>PTR_COMMIT){
       ind.textContent='↻ 離してリロード';ind.className='ready';
     } else {
-      ind.textContent='↓ 引っ張ってリロード';ind.className='pulling';
+      ind.textContent='↓ もっと引っ張る';ind.className='pulling';
     }
   },{passive:true});
+
   document.addEventListener('touchend',e=>{
-    if(!ptActive){ptStart=null;ind.className='';return;}
-    const dy=e.changedTouches[0].clientY-ptStart;
-    ptStart=null;ptActive=false;
-    if(dy>PTR_THRESHOLD){
+    if(!ptActive){ptStartY=null;ptStartX=null;ind.className='';return;}
+    const dy=e.changedTouches[0].clientY-ptStartY;
+    ptStartY=null;ptStartX=null;ptActive=false;ptLocked=false;
+    if(dy>PTR_COMMIT){
       ind.textContent='↻ リロード中…';ind.className='ready';
-      setTimeout(()=>location.reload(),300);
+      setTimeout(()=>location.reload(),400);
     } else {
       ind.className='';
     }
