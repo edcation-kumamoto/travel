@@ -381,19 +381,18 @@ function saveToFirestore() {
 // Firestoreからリアルタイム受信
 onSnapshot(doc(db, "trips", tripId), (snap) => {
   if (snap.exists()) {
-    // 入力中（フォーカスがinputにある）はUIを再描画しない
+    // 入力中（フォーカスがinputにある）はdaysの上書きも再描画もスキップ
     const focused = document.activeElement;
     const isEditing = focused && (focused.tagName==='INPUT'||focused.tagName==='TEXTAREA');
+    if (isEditing) return;
     isSyncing = true;
     const data = snap.data();
     days = data.days || [];
-    if (data.tripName && !isEditing) document.getElementById('tripName').value = data.tripName;
+    document.getElementById('tripName').value = data.tripName || '';
     days.forEach(d => d.events.forEach(e => { if (e.id >= nextId) nextId = e.id + 1; }));
     curDay = Math.min(curDay, Math.max(0, days.length - 1));
-    if (!isEditing) {
-      renderHeader();
-      renderTimeline();
-    }
+    renderHeader();
+    renderTimeline();
     isSyncing = false;
   } else {
     // 初回：デフォルトデータを作成して保存
@@ -492,7 +491,7 @@ document.getElementById('addDayBtn').addEventListener('click',()=>{
   }
   days.push({date:newDate,events:[]});
   curDay=days.length-1;
-  renderHeader();renderTimeline();
+  renderHeader();renderTimeline();saveToFirestore();
 });
 
 function renderHeader(){
@@ -584,7 +583,7 @@ function setupDragDrop(){
   trash.addEventListener('dragleave',()=>trash.classList.remove('over'));
   trash.addEventListener('drop',e=>{
     e.preventDefault();trash.classList.remove('over');
-    if(typeof dragSrc==='number'&&getEvents().length>1){getEvents().splice(dragSrc,1);dragSrc=null;renderTimeline();}
+    if(typeof dragSrc==='number'&&getEvents().length>1){getEvents().splice(dragSrc,1);dragSrc=null;renderTimeline();saveToFirestore();}
   });
   trash.addEventListener('touchstart',()=>trash.classList.add('over'),{passive:true});
   trash.addEventListener('touchend',()=>trash.classList.remove('over'));
@@ -647,7 +646,7 @@ document.addEventListener('touchend',e=>{
     const dz=el.closest('.drop-zone');
     if(dz){handleDrop(parseInt(dz.dataset.insert),touchDragData.src);dropped=true;}
     const tr=el.closest('#trash');
-    if(tr&&typeof touchDragData.src==='number'&&getEvents().length>1){getEvents().splice(touchDragData.src,1);renderTimeline();dropped=true;}
+    if(tr&&typeof touchDragData.src==='number'&&getEvents().length>1){getEvents().splice(touchDragData.src,1);renderTimeline();saveToFirestore();dropped=true;}
   }
   /* タップ判定：palette & ほぼ動いていない → 末尾に追加 */
   if(!dropped&&touchDragData.src==='palette'){
@@ -668,13 +667,13 @@ function handleDrop(ins,src){
   const evs=getEvents();
   if(s==='palette'){
     evs.splice(ins,0,mkEvent('新しいイベント',null,60));
-    dragSrc=null;renderTimeline();
+    dragSrc=null;renderTimeline();saveToFirestore();
     setTimeout(()=>{const ns=document.querySelectorAll('.ev-name');if(ns[ins]){ns[ins].focus();ns[ins].select();}},50);
   } else if(typeof s==='number'&&s!==ins&&s!==ins-1){
     const moved=evs.splice(s,1)[0];
     const ni=ins>s?ins-1:ins;
     evs.splice(ni,0,moved);
-    dragSrc=null;renderTimeline();
+    dragSrc=null;renderTimeline();saveToFirestore();
   } else{dragSrc=null;renderTimeline();}
 }
 
