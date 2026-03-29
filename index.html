@@ -16,7 +16,20 @@ html,body{
   background:#F5C842;
   min-height:100vh;
   touch-action:pan-y;
+  overscroll-behavior-y:none;
 }
+/* プルトゥリフレッシュ表示 */
+#ptr-indicator{
+  position:fixed;top:0;left:0;right:0;z-index:500;
+  display:flex;align-items:center;justify-content:center;
+  height:0;overflow:hidden;
+  background:rgba(46,125,120,.9);
+  color:#fff;font-size:13px;font-weight:700;
+  font-family:'M PLUS Rounded 1c',sans-serif;
+  transition:height .18s ease;pointer-events:none;
+}
+#ptr-indicator.pulling{height:44px;}
+#ptr-indicator.ready{height:44px;background:#2E7D78;}
 
 /* 背景ドットパターン */
 body::before{
@@ -90,15 +103,14 @@ body::before{
 .date-display{font-size:17px;font-weight:700;color:#fff;line-height:1.2}
 .day-label{font-size:11px;color:rgba(255,255,255,.55);margin-top:1px;font-family:'M PLUS Rounded 1c',sans-serif}
 
-/* iOSジグル削除 */
-@keyframes jiggle{
-  0%,100%{transform:rotate(0deg)}
-  20%{transform:rotate(-2.5deg)}
-  40%{transform:rotate(2.5deg)}
-  60%{transform:rotate(-2deg)}
-  80%{transform:rotate(2deg)}
+/* 削除モード */
+.ev-wrap.jiggle .ev-card{
+  background:#fff0f0;
+  outline:2px solid rgba(255,59,48,.35);
+  outline-offset:1px;
 }
-.ev-wrap.jiggle .ev-card{animation:jiggle .38s ease-in-out infinite;background:#fff8f8}
+@keyframes del-pulse{0%,100%{opacity:1}50%{opacity:.7}}
+.ev-wrap.jiggle .ev-del-btn{animation:del-pulse 1.2s ease-in-out infinite}
 
 /* 削除ボタン：list-toggleと同位置、jiggle時に差し替え */
 .ev-del-btn{
@@ -319,7 +331,7 @@ body::before{
   touch-action:manipulation;
 }
 .dur-btn:active{background:rgba(46,125,120,.22)}
-.dur-btn.locked{background:rgba(180,100,0,.1);border-color:rgba(200,130,0,.45);color:#a06400;font-weight:700}
+.dur-btn.locked{background:rgba(180,100,0,.18);border-color:rgba(200,130,0,.6);color:#a06400;font-weight:700;border-width:1.5px}
 .dur-btn.locked:active{background:rgba(180,100,0,.2)}
 .dur-btn.warn{background:rgba(220,53,34,.1);border-color:rgba(220,53,34,.4);color:#dc3522;}
 .dur-btn.warn:active{background:rgba(220,53,34,.2)}
@@ -349,6 +361,7 @@ body::before{
 </head>
 <body>
 
+<div id="ptr-indicator">↻ 離してリロード</div>
 <div class="app" id="app">
   <div class="app-head" id="appHead">
     <div class="trip-name-row collapsible">
@@ -607,7 +620,7 @@ function saveToFirestore() {
       setTimeout(()=>hint.remove(), 4000);
     }
     if (saveTimer !== null) saveTimer = null;
-  }, 500);
+  }, 200);
 }
 
 // Firestoreからリアルタイム受信
@@ -850,8 +863,14 @@ function addDay(){
     const ratio=Math.abs(dx)/W;
     swX=null;swY=null;swLocked=null;swActive=false;
 
+    // 入力中のblurを強制してから保存
+    if(document.activeElement&&(document.activeElement.tagName==='INPUT'||document.activeElement.tagName==='TEXTAREA')){
+      document.activeElement.blur();
+    }
+
     if(dx < -W*COMMIT_RATIO){
       if(curDay < days.length-1){
+        saveToFirestore();
         setTrackX(-W,true);
         setTimeout(()=>{ curDay++; renderHeader(); renderTimeline(); },320);
       } else if(ratio>=CREATE_COMMIT_RATIO){
@@ -861,6 +880,7 @@ function addDay(){
         setTrackX(0,true);
       }
     } else if(dx > W*COMMIT_RATIO && curDay>0){
+      saveToFirestore();
       setTrackX(W,true);
       setTimeout(()=>{ curDay--; renderHeader(); renderTimeline(); },320);
     } else {
@@ -1001,69 +1021,56 @@ function setupDragDrop(){
     dz.addEventListener('drop',e=>{e.preventDefault();handleDrop(parseInt(dz.dataset.insert));});
   });
 
-  /* コネクター1秒長押し → ＋ボタン出現、そのままドラッグして挿入 */
+  /* コネクター長押し → ＋ボタン出現 → ドラッグで挿入 */
   document.querySelectorAll('.connector').forEach((conn,ci)=>{
     let lpTimer=null;
-    let lpFired=false;
     const addBtn=conn.querySelector('.conn-add-btn');
     if(!addBtn) return;
     const ins=parseInt(addBtn.dataset.insertIdx);
 
-    function showAddBtn(touchX,touchY){
-      addBtn.classList.add('visible');
-      if(navigator.vibrate)navigator.vibrate(40);
-      // そのままドラッグ開始
-      exitJiggle();
-      touchDragData={src:'new',insertIdx:ins,startX:touchX,startY:touchY};
-      createTouchClone('＋',touchX,touchY,'#3b82f6');
-    }
-
-    // タッチ長押し
+    // タッチ長押し開始
     conn.addEventListener('touchstart',e=>{
       if(touchDragData)return;
       if(e.target.closest('.dur-btn,.conn-add-btn'))return;
-      lpFired=false;
       const t=e.touches[0];
       lpTimer=setTimeout(()=>{
-        lpFired=true;
-        showAddBtn(t.clientX,t.clientY);
+        lpTimer=null;
+        hideAllAddBtns();
+        addBtn.classList.add('visible');
+        if(navigator.vibrate)navigator.vibrate(40);
       },800);
     },{passive:true});
 
-    conn.addEventListener('touchend',e=>{
-      if(!lpFired){clearTimeout(lpTimer);lpTimer=null;}
-    },{passive:true});
-    conn.addEventListener('touchcancel',()=>{clearTimeout(lpTimer);lpTimer=null;lpFired=false;},{passive:true});
-    conn.addEventListener('touchmove',()=>{
-      if(!lpFired){clearTimeout(lpTimer);lpTimer=null;}
-    },{passive:true});
+    conn.addEventListener('touchend',()=>{if(lpTimer){clearTimeout(lpTimer);lpTimer=null;}},{passive:true});
+    conn.addEventListener('touchcancel',()=>{if(lpTimer){clearTimeout(lpTimer);lpTimer=null;}},{passive:true});
+    conn.addEventListener('touchmove',()=>{if(lpTimer){clearTimeout(lpTimer);lpTimer=null;}},{passive:true});
 
-    // ＋ボタン自体のタッチ開始（すでに表示中の場合のドラッグ開始）
+    // ＋ボタンを長押し/ドラッグして挿入
     addBtn.addEventListener('touchstart',e=>{
       e.stopPropagation();
       const t=e.touches[0];
-      exitJiggle();
-      touchDragData={src:'new',insertIdx:ins,startX:t.clientX,startY:t.clientY};
-      createTouchClone('＋',t.clientX,t.clientY,'#3b82f6');
+      // addBtnは表示のまま維持、クローンは作らない
+      // touchDragDataにnew-addボタン専用フラグ
+      touchDragData={src:'new-add',insertIdx:ins,origBtn:addBtn,startX:t.clientX,startY:t.clientY};
     },{passive:true});
 
-    // マウス長押し（デスクトップ）
+    // デスクトップ
     conn.addEventListener('mousedown',e=>{
       if(touchDragData)return;
       if(e.target.closest('.dur-btn,.conn-add-btn'))return;
-      lpFired=false;
       lpTimer=setTimeout(()=>{
-        lpFired=true;
+        lpTimer=null;
+        hideAllAddBtns();
         addBtn.classList.add('visible');
         if(navigator.vibrate)navigator.vibrate(40);
       },800);
     });
-    conn.addEventListener('mouseup',()=>{clearTimeout(lpTimer);lpTimer=null;});
-    conn.addEventListener('mouseleave',()=>{if(!lpFired){clearTimeout(lpTimer);lpTimer=null;}});
+    conn.addEventListener('mouseup',()=>{if(lpTimer){clearTimeout(lpTimer);lpTimer=null;}});
+    conn.addEventListener('mouseleave',()=>{if(lpTimer){clearTimeout(lpTimer);lpTimer=null;}});
 
     addBtn.addEventListener('mousedown',e=>{
       e.stopPropagation();
-      dragSrc='new-'+ins;
+      touchDragData={src:'new-add',insertIdx:ins,origBtn:addBtn,startX:e.clientX,startY:e.clientY};
     });
   });
 
@@ -1104,35 +1111,51 @@ function removeTouchClone(){if(touchClone){touchClone.remove();touchClone=null;}
 document.addEventListener('touchmove',e=>{
   if(!touchDragData)return;
   const t=e.touches[0];
-  if(touchClone){touchClone.style.left=(t.clientX-22)+'px';touchClone.style.top=(t.clientY-22)+'px';}
-  cleanDZ();
-  const el=document.elementFromPoint(t.clientX,t.clientY);
-  if(el){
-    const dz=el.closest('.drop-zone');if(dz)dz.classList.add('over');
-  }
-},{passive:true});
 
-document.addEventListener('touchend',e=>{
-  hideAllAddBtns && hideAllAddBtns();
-  if(!touchDragData){removeTouchClone();return;}
-  removeTouchClone();
-  const t=e.changedTouches[0];
-
-  if(touchDragData.src==='new'){
-    const el=document.elementFromPoint(t.clientX,t.clientY);
-    let ins=touchDragData.insertIdx;
-    if(el){
-      const dz=el.closest('.drop-zone');
-      if(dz) ins=parseInt(dz.dataset.insert);
+  if(touchDragData.src==='new-add'){
+    const btn=touchDragData.origBtn;
+    if(btn){
+      btn.style.position='fixed';
+      btn.style.left=(t.clientX-15)+'px';
+      btn.style.top=(t.clientY-15)+'px';
+      btn.style.zIndex='9999';
+      btn.style.pointerEvents='none';
     }
     cleanDZ();
-    touchDragData=null;
-    days[curDay].events.splice(ins,0,mkEvent('新しいイベント',null,60));
-    renderTimeline();saveToFirestore();
-    setTimeout(()=>{const ns=document.querySelectorAll('.ev-name');if(ns[ins]){ns[ins].focus();ns[ins].select();}},50);
+    const el=document.elementFromPoint(t.clientX,t.clientY);
+    if(el){const dz=el.closest('.drop-zone');if(dz)dz.classList.add('over');}
     return;
   }
 
+  if(touchClone){touchClone.style.left=(t.clientX-22)+'px';touchClone.style.top=(t.clientY-22)+'px';}
+  cleanDZ();
+  const el=document.elementFromPoint(t.clientX,t.clientY);
+  if(el){const dz=el.closest('.drop-zone');if(dz)dz.classList.add('over');}
+},{passive:true});
+
+document.addEventListener('touchend',e=>{
+  hideAllAddBtns();
+
+  if(touchDragData?.src==='new-add'){
+    const btn=touchDragData.origBtn;
+    if(btn){btn.style.cssText='';}
+    const t=e.changedTouches[0];
+    const el=document.elementFromPoint(t.clientX,t.clientY);
+    let ins=null;
+    if(el){const dz=el.closest('.drop-zone');if(dz)ins=parseInt(dz.dataset.insert);}
+    cleanDZ();
+    touchDragData=null;
+    if(ins!==null){
+      days[curDay].events.splice(ins,0,mkEvent('新しいイベント',null,60));
+      renderTimeline();saveToFirestore();
+      setTimeout(()=>{const ns=document.querySelectorAll('.ev-name');if(ns[ins]){ns[ins].focus();ns[ins].select();}},50);
+    }
+    return;
+  }
+
+  if(!touchDragData){removeTouchClone();return;}
+  removeTouchClone();
+  const t=e.changedTouches[0];
   const el=document.elementFromPoint(t.clientX,t.clientY);
   if(el){
     const dz=el.closest('.drop-zone');
@@ -1263,15 +1286,18 @@ document.getElementById('tpOk').addEventListener('click',applyTime);
 function timeOut(e){if(!document.getElementById('timePopup').contains(e.target))closeTimePopup();}
 function closeTimePopup(){document.getElementById('timePopup').style.display='none';timePopupIdx=null;document.removeEventListener('click',timeOut);document.body.style.overflow='';}
 
-function toggleList(evs,idx){
+function toggleList(evs,idx,paneId){
   evs[idx].open=!evs[idx].open;
-  const cl=document.getElementById('cl-'+idx);
-  const btn=document.getElementById('lt-'+idx);
+  const pid=paneId||'main';
+  const cl=document.getElementById('cl-'+pid+'-'+idx);
+  const btn=document.getElementById('lt-'+pid+'-'+idx);
   if(cl)cl.className='checklist'+(evs[idx].open?' open':'');
   if(btn){btn.className='list-toggle'+(evs[idx].open?' open':'');btn.textContent=evs[idx].open?'−':'≡';}
+  saveToFirestore();
 }
-function renderChecklist(evs,evIdx){
-  const cl=document.getElementById('cl-'+evIdx);if(!cl)return;
+function renderChecklist(evs,evIdx,paneId){
+  const pid=paneId||'main';
+  const cl=document.getElementById('cl-'+pid+'-'+evIdx);if(!cl)return;
   const checks=evs[evIdx].checks;cl.innerHTML='';
   checks.forEach((c,ci)=>{
     const row=document.createElement('div');row.className='check-item';
@@ -1328,6 +1354,7 @@ function renderTimeline(){
 
 function renderTimelineInto(tl, evs, dayIdx){
   const isMainPane = (tl === document.getElementById('timelineArea'));
+  const paneId = isMainPane ? 'main' : ('p'+dayIdx); // ユニークなIDプレフィックス
   if(!days.length){
     if(isMainPane) tl.innerHTML='<div class="empty-hint"><div class="big">—</div>上の「日程を追加」から始めましょう</div>';
     if(isMainPane) setupDragDrop();return;
@@ -1381,11 +1408,11 @@ function renderTimelineInto(tl, evs, dayIdx){
     nameIn.addEventListener('touchstart',ev=>ev.stopPropagation(),{passive:true});
 
     // listBtn と delBtn を状態で切り替え
-    const listBtn=document.createElement('button');listBtn.id='lt-'+i;
+    const listBtn=document.createElement('button');listBtn.id='lt-'+paneId+'-'+i;
     listBtn.className='list-toggle'+(e.open?' open':'');listBtn.textContent=e.open?'−':'≡';
     listBtn.addEventListener('mousedown',ev=>ev.stopPropagation());
     listBtn.addEventListener('touchstart',ev=>ev.stopPropagation(),{passive:true});
-    listBtn.addEventListener('click',ev=>{ev.stopPropagation();if(!wrap.classList.contains('jiggle'))toggleList(evs,i);});
+    listBtn.addEventListener('click',ev=>{ev.stopPropagation();if(!wrap.classList.contains('jiggle'))toggleList(evs,i,paneId);});
 
     const delBtn=document.createElement('button');delBtn.className='ev-del-btn';delBtn.textContent='✕';
     delBtn.style.display='none';
@@ -1414,12 +1441,12 @@ function renderTimelineInto(tl, evs, dayIdx){
       delBtn.style.display='none';
     };
 
-    const cl=document.createElement('div');cl.id='cl-'+i;cl.className='checklist'+(e.open?' open':'');
+    const cl=document.createElement('div');cl.id='cl-'+paneId+'-'+i;cl.className='checklist'+(e.open?' open':'');
     right.appendChild(cl);
     row.appendChild(left);row.appendChild(right);
     wrap.appendChild(row);
     tl.appendChild(wrap);
-    renderChecklist(evs,i);
+    if(isMainPane) renderChecklist(evs,i,paneId);
 
     if(!isLast){
       const dur=e.dur??0;
@@ -1463,6 +1490,40 @@ function renderTimelineInto(tl, evs, dayIdx){
 }
 
 document.getElementById('tripName').addEventListener('input', saveToFirestore);
+
+// ── プルトゥリフレッシュ ─────────────────────────────────
+(function(){
+  const PTR_THRESHOLD=80;
+  const ind=document.getElementById('ptr-indicator');
+  let ptStart=null,ptActive=false;
+  document.addEventListener('touchstart',e=>{
+    if(window.scrollY>5)return;
+    ptStart=e.touches[0].clientY;
+    ptActive=false;
+  },{passive:true});
+  document.addEventListener('touchmove',e=>{
+    if(ptStart==null||window.scrollY>2)return;
+    const dy=e.touches[0].clientY-ptStart;
+    if(dy<10)return;
+    ptActive=true;
+    if(dy>PTR_THRESHOLD){
+      ind.textContent='↻ 離してリロード';ind.className='ready';
+    } else {
+      ind.textContent='↓ 引っ張ってリロード';ind.className='pulling';
+    }
+  },{passive:true});
+  document.addEventListener('touchend',e=>{
+    if(!ptActive){ptStart=null;ind.className='';return;}
+    const dy=e.changedTouches[0].clientY-ptStart;
+    ptStart=null;ptActive=false;
+    if(dy>PTR_THRESHOLD){
+      ind.textContent='↻ リロード中…';ind.className='ready';
+      setTimeout(()=>location.reload(),300);
+    } else {
+      ind.className='';
+    }
+  },{passive:true});
+})();
 </script>
 </body>
 </html>
