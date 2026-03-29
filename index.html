@@ -28,7 +28,7 @@ body::before{
   z-index:0;
 }
 
-.app{max-width:100%;margin:0 auto;padding:0 0 40px;position:relative;z-index:1}
+.app{max-width:100%;margin:0 auto;padding:0 0 120px;position:relative;z-index:1}
 
 /* ── ヘッダー ── */
 .app-head{
@@ -288,16 +288,14 @@ body::before{
         <div class="date-display" id="dateDisplay">—</div>
       </div>
       <button class="nav-btn" id="nextDay">›</button>
+      <button class="hdr-add-btn" id="addBtn" title="イベント追加">+</button>
+      <div class="hdr-trash" id="trash">×</div>
     </div>
     <div class="date-dots-wrap collapsible">
       <div class="date-dots" id="dateDots"></div>
     </div>
     <div class="add-day-wrap collapsible">
-      <div class="add-day-row">
-        <button class="add-day-btn" id="addDayBtn">＋ 日程を追加</button>
-        <button class="hdr-add-btn" id="addBtn" title="イベント追加">+</button>
-        <div class="hdr-trash" id="trash">×</div>
-      </div>
+      <button class="add-day-btn" id="addDayBtn">＋ 日程を追加</button>
     </div>
   </div>
 
