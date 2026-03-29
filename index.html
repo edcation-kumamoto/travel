@@ -384,29 +384,72 @@ function isEditingNow() {
 
 function applySnap(snap) {
   if (!snap.exists()) return;
+  // Bug Fix 3a: ローカルに未送信の保存がある場合はリモート適用をスキップ。
+  // saveTimer が残っている = ユーザーの最新操作がまだFirestoreに届いていない。
+  // ここで上書きするとその変更が失われる。タイマー発火→確認スナップ到着後に
+  // 改めて他ユーザーのスナップが来るまで待つ。
+  if (saveTimer !== null) return;
   isSyncing = true;
   const data = snap.data();
-  days = data.days || [];
+
+  // 他人のデータを受け取る前に、自分がメモリ上で持っている変更をFirestoreデータにマージする
+  // （saveToFirestore で送信済みの内容はFirestore側が正しいのでそのまま使う）
+  const incoming = data.days || [];
+
+  // 現在の days を上書き
+  days = incoming;
   document.getElementById('tripName').value = data.tripName || '';
   days.forEach(d => d.events.forEach(e => { if (e.id >= nextId) nextId = e.id + 1; }));
   curDay = Math.min(curDay, Math.max(0, days.length - 1));
+
+  // Bug Fix 3b: フォーカス復元 — IDなし要素（ev-name等）も data-idx で追跡する
+  const focused = document.activeElement;
+  const focusedId = focused?.id || null;
+  const focusedEvIdx = focused?.dataset?.evIdx ?? null;
+  const focusedRole  = focused?.dataset?.role  ?? null;
+  const focusedValue = focused?.value ?? null;
+
   renderHeader();
   renderTimeline();
   isSyncing = false;
   pendingSnap = null;
+
+  // 再描画後にフォーカスを復元
+  if (focusedId) {
+    const el = document.getElementById(focusedId);
+    if (el && focusedValue !== null) { el.value = focusedValue; el.focus(); }
+  } else if (focusedEvIdx !== null && focusedRole) {
+    const sel = `[data-ev-idx="${focusedEvIdx}"][data-role="${focusedRole}"]`;
+    const el = document.querySelector(sel);
+    if (el && focusedValue !== null) { el.value = focusedValue; el.focus(); }
+  }
 }
 
 function saveToFirestore() {
   if (isSyncing) return;
   clearTimeout(saveTimer);
+  // Bug Fix 2: days と tripName をここで確定コピーする。
+  // setTimeout内でアクセスすると applySnap による days の再代入後に
+  // 別ユーザーのデータを誤って保存してしまう。
+  const daysToSave = JSON.parse(JSON.stringify(days));
+  const nameToSave = document.getElementById('tripName').value;
   saveTimer = setTimeout(async () => {
     try {
       await setDoc(doc(db, "trips", tripId), {
-        days,
-        tripName: document.getElementById('tripName').value,
+        days: daysToSave,
+        tripName: nameToSave,
         _lastEditor: clientId  // 「誰が最後に保存したか」を記録
       });
-    } catch(e) { console.error('save error', e); }
+    } catch(e) {
+      console.error('save error', e);
+      // 保存失敗を画面に表示
+      const hint = document.createElement('div');
+      hint.textContent = '⚠️ 保存に失敗しました（権限かネット接続を確認）';
+      hint.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:#c0392b;color:#fff;padding:8px 16px;border-radius:12px;font-size:12px;z-index:9999;font-family:"M PLUS Rounded 1c",sans-serif';
+      document.body.appendChild(hint);
+      setTimeout(()=>hint.remove(), 4000);
+    }
+    saveTimer = null;
   }, 500);
 }
 
@@ -430,6 +473,11 @@ onSnapshot(doc(db, "trips", tripId), (snap) => {
         mkEvent('ホテル着',null,null),
       ]
     }];
+    // Bug Fix 1: 初回作成時も必ず画面を描画する。
+    // saveToFirestore後のスナップショットは _lastEditor===clientId で
+    // スキップされるため、ここで描画しないと永遠に空白のままになる。
+    renderHeader();
+    renderTimeline();
     saveToFirestore();
     return;
   }
@@ -607,7 +655,7 @@ function setupDragDrop(){
   addBtn.addEventListener('click',()=>{
     if(!addDragged&&days.length>0){
       getEvents().push(mkEvent('新しいイベント',null,60));
-      renderTimeline();
+      renderTimeline();saveToFirestore();
       setTimeout(()=>{const ns=document.querySelectorAll('.ev-name');if(ns.length)ns[ns.length-1].focus();},50);
     }
   });
@@ -694,7 +742,7 @@ document.addEventListener('touchend',e=>{
     const dy=t.clientY-touchDragData.startY;
     if(Math.abs(dx)<12&&Math.abs(dy)<12&&days.length>0){
       getEvents().push(mkEvent('新しいイベント',null,60));
-      renderTimeline();
+      renderTimeline();saveToFirestore();
       setTimeout(()=>{const ns=document.querySelectorAll('.ev-name');if(ns.length)ns[ns.length-1].focus();},50);
     }
   }
@@ -733,7 +781,7 @@ function openDurPicker(idx,el){
   const padT=document.createElement('div');padT.style.cssText='height:90px;flex-shrink:0';inner.appendChild(padT);
   opts.forEach(v=>{
     const d=document.createElement('div');d.className='dur-item'+(v===cur?' sel':'');d.textContent=v+'分';
-    d.addEventListener('click',()=>{evs[idx].dur=v;closeDurPicker();renderTimeline();});
+    d.addEventListener('click',()=>{evs[idx].dur=v;closeDurPicker();renderTimeline();saveToFirestore();});
     inner.appendChild(d);
   });
   const padB=document.createElement('div');padB.style.cssText='height:90px;flex-shrink:0';inner.appendChild(padB);
@@ -798,7 +846,7 @@ function applyTime(){
     const times=computeTimes(evs);
     if(timePopupIdx>0&&times[timePopupIdx-1]!=null){const nd=parsed-times[timePopupIdx-1];if(nd>=0)evs[timePopupIdx-1].dur=nd;}
   }
-  closeTimePopup();renderTimeline();
+  closeTimePopup();renderTimeline();saveToFirestore();
 }
 document.getElementById('tpFix').addEventListener('click',function(){tpFixed=!tpFixed;this.className='tp-fix'+(tpFixed?' on':'');});
 document.getElementById('tpOk').addEventListener('click',applyTime);
@@ -886,6 +934,7 @@ function renderTimeline(){
     const card=document.createElement('div');card.className='ev-card';
     const handle=document.createElement('div');handle.className='drag-handle';handle.textContent='⠿';
     const nameIn=document.createElement('input');nameIn.className='ev-name';nameIn.placeholder='イベント名';nameIn.value=e.name;
+    nameIn.dataset.evIdx=i; nameIn.dataset.role='ev-name';
     nameIn.addEventListener('input',function(){evs[i].name=this.value;saveToFirestore();});
     nameIn.addEventListener('mousedown',ev=>ev.stopPropagation());
     const listBtn=document.createElement('button');listBtn.id='lt-'+i;
