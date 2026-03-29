@@ -142,7 +142,7 @@ body::before{
 .add-day-btn:active{background:rgba(255,255,255,.1)}
 
 /* ── タイムライン ── */
-.timeline-area{padding:12px 12px 4px}
+.timeline-area{padding:12px 12px 4px;overflow-x:hidden;width:100%}
 .empty-hint{text-align:center;padding:48px 20px;color:#7a6010;font-size:14px;font-family:'M PLUS Rounded 1c',sans-serif;line-height:1.8}
 .empty-hint .big{font-size:36px;margin-bottom:10px;letter-spacing:-.02em;color:#b08800;font-weight:900}
 
@@ -168,7 +168,7 @@ body::before{
 }
 .ev-time:active{background:rgba(255,255,255,.65)}
 .ev-time.fixed{color:#c0392b;background:rgba(192,57,43,.12);text-shadow:none}
-.ev-right{flex:1}
+.ev-right{flex:1;min-width:0;overflow:visible}
 
 /* ── 雲形カード ── */
 .ev-card{
@@ -262,7 +262,7 @@ body::before{
 .dur-hl{position:absolute;left:0;right:0;top:60px;height:40px;border-top:1.5px solid #2E7D78;border-bottom:1.5px solid #2E7D78;pointer-events:none}
 
 /* ── 時刻ポップアップ ── */
-.time-popup{position:fixed;z-index:950;background:#fff;border:.5px solid #e0e0e0;border-radius:16px;box-shadow:0 4px 20px rgba(0,0,0,.15);padding:14px;width:190px;display:none}
+.time-popup{position:fixed;z-index:950;background:#fff;border:.5px solid #e0e0e0;border-radius:20px 20px 0 0;box-shadow:0 -4px 24px rgba(0,0,0,.18);padding:20px 20px 36px;width:100%;display:none}
 .tp-label{font-size:11px;color:#888;margin-bottom:6px;font-family:'M PLUS Rounded 1c',sans-serif}
 .tp-input{width:100%;font-size:24px;font-weight:500;color:#1a1a1a;background:#f5f5f5;border:.5px solid #e0e0e0;border-radius:10px;padding:7px 8px;text-align:center;outline:none;font-family:monospace;margin-bottom:10px}
 .tp-input:focus{border-color:#2E7D78}
@@ -641,12 +641,13 @@ function openTimePopup(idx,el){
   const t=times[idx];tpFixed=!!evs[idx].fixedTime;
   document.getElementById('tpInput').value=t!=null?fmtT(t):'';
   document.getElementById('tpFix').className='tp-fix'+(tpFixed?' on':'');
-  const p=document.getElementById('timePopup');p.style.display='block';
-  const r=el.getBoundingClientRect();
-  p.style.top=(r.bottom+4+window.scrollY)+'px';
-  p.style.left=Math.max(4,Math.min(window.innerWidth-194,r.left+r.width/2-95))+'px';
-  document.getElementById('tpInput').focus();
-  setTimeout(()=>document.addEventListener('click',timeOut),10);
+  const p=document.getElementById('timePopup');
+  // スマホ対策：画面下部にシートとして表示（キーボードの上に出る）
+  p.style.cssText='display:block;position:fixed;bottom:0;left:0;right:0;top:auto;width:100%;border-radius:20px 20px 0 0;box-shadow:0 -4px 24px rgba(0,0,0,.18);padding:20px 20px 36px;z-index:950;background:#fff;border:.5px solid #e0e0e0;';
+  setTimeout(()=>{
+    document.getElementById('tpInput').focus();
+    setTimeout(()=>document.addEventListener('click',timeOut),10);
+  },50);
 }
 
 function applyTime(){
