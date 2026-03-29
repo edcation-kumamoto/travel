@@ -90,34 +90,34 @@ body::before{
 .date-display{font-size:17px;font-weight:700;color:#fff;line-height:1.2}
 .day-label{font-size:11px;color:rgba(255,255,255,.55);margin-top:1px;font-family:'M PLUS Rounded 1c',sans-serif}
 
-/* ＋ボタン（追加） */
-.hdr-add-btn{
-  width:38px;height:38px;border-radius:50%;
-  background:rgba(245,200,66,.18);
-  border:1.5px solid rgba(245,200,66,.5);
-  color:#F5C842;
-  font-size:22px;font-weight:300;line-height:1;
-  display:flex;align-items:center;justify-content:center;
-  cursor:pointer;flex-shrink:0;
-  touch-action:none;
-  transition:background .15s,transform .1s,box-shadow .15s;
+/* iOSジグル削除 */
+@keyframes jiggle{
+  0%,100%{transform:rotate(0deg)}
+  20%{transform:rotate(-2.5deg)}
+  40%{transform:rotate(2.5deg)}
+  60%{transform:rotate(-2deg)}
+  80%{transform:rotate(2deg)}
+}
+.ev-wrap.jiggle .ev-card{animation:jiggle .38s ease-in-out infinite}
+.ev-delete-badge{
+  position:absolute;top:-8px;left:-8px;
+  width:22px;height:22px;border-radius:50%;
+  background:#ff3b30;color:#fff;
+  font-size:14px;font-weight:900;line-height:22px;text-align:center;
+  z-index:10;cursor:pointer;
+  box-shadow:0 2px 6px rgba(0,0,0,.35);
+  display:none;touch-action:manipulation;
   user-select:none;
 }
-.hdr-add-btn:active{background:rgba(245,200,66,.32);transform:scale(.88)}
-.hdr-add-btn.dragging-src{background:rgba(245,200,66,.35);box-shadow:0 0 0 3px rgba(245,200,66,.4)}
+.ev-wrap.jiggle .ev-delete-badge{display:block}
 
-/* ゴミ箱 */
-.hdr-trash{
-  width:38px;height:38px;border-radius:50%;
-  background:rgba(192,57,43,.14);
-  border:1.5px dashed rgba(220,100,80,.55);
-  color:rgba(240,150,130,.9);
-  font-size:16px;
-  display:flex;align-items:center;justify-content:center;
-  flex-shrink:0;
-  transition:all .18s;
+/* コネクター長押しヒント */
+.connector.lp-hint .conn-right::after{
+  content:'＋ ここに追加';
+  font-size:10px;color:#2E7D78;font-weight:700;
+  font-family:'M PLUS Rounded 1c',sans-serif;
+  opacity:.7;
 }
-.hdr-trash.over{background:rgba(192,57,43,.32);border-style:solid;border-color:rgba(220,80,60,.9);color:#fff;transform:scale(1.08)}
 
 /* ドット行 */
 .date-dots-wrap{display:flex;justify-content:center}
@@ -319,8 +319,6 @@ body::before{
         <div class="date-display" id="dateDisplay">—</div>
       </div>
       <button class="nav-btn" id="nextDay">›</button>
-      <button class="hdr-add-btn" id="addBtn" title="イベント追加">+</button>
-      <div class="hdr-trash" id="trash">×</div>
     </div>
     <div class="date-dots-wrap collapsible">
       <div class="date-dots" id="dateDots"></div>
@@ -822,59 +820,33 @@ window.addEventListener('scroll',()=>{
 let touchDragData=null;
 let touchClone=null;
 
+function exitJiggle(){
+  document.querySelectorAll('.ev-wrap.jiggle').forEach(el=>el.classList.remove('jiggle'));
+}
+
 function setupDragDrop(){
-  const addBtn=document.getElementById('addBtn');
-  const trash=document.getElementById('trash');
-
-  /* ＋ボタン：デスクトップ drag */
-  let addDragged=false;
-  addBtn.draggable=true;
-  addBtn.addEventListener('dragstart',e=>{
-    addDragged=true;
-    dragSrc='palette';
-    e.dataTransfer.effectAllowed='copy';
-    e.dataTransfer.setData('text/plain','palette');
-    addBtn.classList.add('dragging-src');
-  });
-  addBtn.addEventListener('dragend',()=>{addDragged=false;dragSrc=null;addBtn.classList.remove('dragging-src');cleanDZ();});
-  /* ＋ボタン：デスクトップ クリック → 末尾に追加 */
-  addBtn.addEventListener('click',()=>{
-    if(!addDragged&&days.length>0){
-      getEvents().push(mkEvent('新しいイベント',null,60));
-      renderTimeline();saveToFirestore();
-      setTimeout(()=>{const ns=document.querySelectorAll('.ev-name');if(ns.length)ns[ns.length-1].focus();},50);
-    }
-  });
-  /* ＋ボタン：タッチ drag開始 */
-  addBtn.addEventListener('touchstart',e=>{
-    const t=e.touches[0];
-    touchDragData={src:'palette',startX:t.clientX,startY:t.clientY};
-    createTouchClone('新イベント',t.clientX,t.clientY);
-  },{passive:true});
-
-  /* ゴミ箱 */
-  trash.addEventListener('dragover',e=>{e.preventDefault();trash.classList.add('over');});
-  trash.addEventListener('dragleave',()=>trash.classList.remove('over'));
-  trash.addEventListener('drop',e=>{
-    e.preventDefault();trash.classList.remove('over');
-    if(typeof dragSrc==='number'&&getEvents().length>1){getEvents().splice(dragSrc,1);dragSrc=null;renderTimeline();saveToFirestore();}
-  });
-  trash.addEventListener('touchstart',()=>trash.classList.add('over'),{passive:true});
-  trash.addEventListener('touchend',()=>trash.classList.remove('over'));
-
-  /* イベントカード */
+  /* ── イベントカード：長押し削除 & デスクトップドラッグ ── */
   document.querySelectorAll('.ev-wrap').forEach((el,i)=>{
+    // デスクトップ drag
     el.draggable=true;
     el.addEventListener('dragstart',e=>{
-      if(e.target.closest('.ev-name,.list-toggle,.check-box,.check-text,.add-check-input,.ev-time,.dur-btn'))return e.preventDefault();
+      if(e.target.closest('.ev-name,.list-toggle,.check-box,.check-text,.add-check-input,.ev-time,.dur-btn,.ev-delete-badge'))return e.preventDefault();
+      exitJiggle();
       dragSrc=i;e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('text/plain',String(i));
       setTimeout(()=>el.classList.add('dragging'),0);
     });
     el.addEventListener('dragend',()=>{el.classList.remove('dragging');dragSrc=null;cleanDZ();});
+
+    // タップで jiggle 解除
+    el.addEventListener('click',ev=>{
+      if(el.classList.contains('jiggle')){ev.stopPropagation();return;}
+    });
   });
 
+  /* ドラッグハンドル：タッチ並び替え */
   document.querySelectorAll('.drag-handle').forEach((handle,i)=>{
     handle.addEventListener('touchstart',e=>{
+      exitJiggle();
       e.stopPropagation();
       const t=e.touches[0];
       touchDragData={src:i,startX:t.clientX,startY:t.clientY};
@@ -882,10 +854,55 @@ function setupDragDrop(){
     },{passive:true});
   });
 
+  /* ドロップゾーン（デスクトップ）*/
   document.querySelectorAll('.drop-zone').forEach(dz=>{
-    dz.addEventListener('dragover',e=>{e.preventDefault();e.dataTransfer.dropEffect=dragSrc==='palette'?'copy':'move';cleanDZ();dz.classList.add('over');});
+    dz.addEventListener('dragover',e=>{e.preventDefault();e.dataTransfer.dropEffect='move';cleanDZ();dz.classList.add('over');});
     dz.addEventListener('dragleave',()=>dz.classList.remove('over'));
     dz.addEventListener('drop',e=>{e.preventDefault();handleDrop(parseInt(dz.dataset.insert));});
+  });
+
+  /* コネクター長押し → その位置に新イベント挿入 */
+  document.querySelectorAll('.connector').forEach((conn,ci)=>{
+    let lpTimer=null;
+    function lpStart(e){
+      if(touchDragData)return;
+      conn.classList.add('lp-hint');
+      lpTimer=setTimeout(()=>{
+        conn.classList.remove('lp-hint');
+        exitJiggle();
+        const ins=ci+1; // connector ci は evs[ci] と evs[ci+1] の間
+        getEvents().splice(ins,0,mkEvent('新しいイベント',null,60));
+        renderTimeline();saveToFirestore();
+        setTimeout(()=>{const ns=document.querySelectorAll('.ev-name');if(ns[ins]){ns[ins].focus();ns[ins].select();}},50);
+      },500);
+    }
+    function lpEnd(){conn.classList.remove('lp-hint');clearTimeout(lpTimer);lpTimer=null;}
+    conn.addEventListener('mousedown',lpStart);
+    conn.addEventListener('mouseup',lpEnd);
+    conn.addEventListener('mouseleave',lpEnd);
+    conn.addEventListener('touchstart',lpStart,{passive:true});
+    conn.addEventListener('touchend',lpEnd);
+    conn.addEventListener('touchcancel',lpEnd);
+  });
+
+  /* ev-wrap 長押し → jiggle モード (ドラッグハンドル以外の場所) */
+  document.querySelectorAll('.ev-card').forEach((card,i)=>{
+    let lpTimer=null;
+    function lpStart(e){
+      if(e.target.closest('.drag-handle,.ev-name,.list-toggle,.check-box,.check-text,.add-check-input,.ev-time,.dur-btn,.ev-delete-badge'))return;
+      lpTimer=setTimeout(()=>{
+        exitJiggle();
+        card.closest('.ev-wrap').classList.add('jiggle');
+        if(navigator.vibrate)navigator.vibrate(30);
+      },500);
+    }
+    function lpEnd(){clearTimeout(lpTimer);lpTimer=null;}
+    card.addEventListener('mousedown',lpStart);
+    card.addEventListener('mouseup',lpEnd);
+    card.addEventListener('mouseleave',lpEnd);
+    card.addEventListener('touchstart',lpStart,{passive:true});
+    card.addEventListener('touchend',lpEnd);
+    card.addEventListener('touchcancel',lpEnd);
   });
 }
 
@@ -915,22 +932,9 @@ document.addEventListener('touchend',e=>{
   removeTouchClone();
   const t=e.changedTouches[0];
   const el=document.elementFromPoint(t.clientX,t.clientY);
-  let dropped=false;
   if(el){
     const dz=el.closest('.drop-zone');
-    if(dz){handleDrop(parseInt(dz.dataset.insert),touchDragData.src);dropped=true;}
-    const tr=el.closest('#trash');
-    if(tr&&typeof touchDragData.src==='number'&&getEvents().length>1){getEvents().splice(touchDragData.src,1);renderTimeline();saveToFirestore();dropped=true;}
-  }
-  /* タップ判定：palette & ほぼ動いていない → 末尾に追加 */
-  if(!dropped&&touchDragData.src==='palette'){
-    const dx=t.clientX-touchDragData.startX;
-    const dy=t.clientY-touchDragData.startY;
-    if(Math.abs(dx)<12&&Math.abs(dy)<12&&days.length>0){
-      getEvents().push(mkEvent('新しいイベント',null,60));
-      renderTimeline();saveToFirestore();
-      setTimeout(()=>{const ns=document.querySelectorAll('.ev-name');if(ns.length)ns[ns.length-1].focus();},50);
-    }
+    if(dz){handleDrop(parseInt(dz.dataset.insert),touchDragData.src);}
   }
   cleanDZ();
   touchDragData=null;
@@ -939,11 +943,7 @@ document.addEventListener('touchend',e=>{
 function handleDrop(ins,src){
   const s=src!==undefined?src:dragSrc;
   const evs=getEvents();
-  if(s==='palette'){
-    evs.splice(ins,0,mkEvent('新しいイベント',null,60));
-    dragSrc=null;renderTimeline();saveToFirestore();
-    setTimeout(()=>{const ns=document.querySelectorAll('.ev-name');if(ns[ins]){ns[ins].focus();ns[ins].select();}},50);
-  } else if(typeof s==='number'&&s!==ins&&s!==ins-1){
+  if(typeof s==='number'&&s!==ins&&s!==ins-1){
     const moved=evs.splice(s,1)[0];
     const ni=ins>s?ins-1:ins;
     evs.splice(ni,0,moved);
@@ -953,8 +953,12 @@ function handleDrop(ins,src){
 
 function cleanDZ(){
   document.querySelectorAll('.drop-zone').forEach(z=>z.classList.remove('over'));
-  const t=document.getElementById('trash');if(t)t.classList.remove('over');
 }
+
+// 画面どこかタップでjiggle解除
+document.addEventListener('click',e=>{
+  if(!e.target.closest('.ev-wrap.jiggle'))exitJiggle();
+},{capture:true});
 
 function openDurPicker(idx,el){
   if(durPickerIdx===idx){closeDurPicker();return;}
@@ -1107,7 +1111,16 @@ function renderTimeline(){
     setupDragDrop();return;
   }
   if(!evs.length){
-    tl.innerHTML='<div class="empty-hint"><div class="big">+</div>右上の ＋ をタップ or ドラッグして<br>イベントを追加しましょう</div>';
+    const hint=document.createElement('div');
+    hint.className='empty-hint';
+    hint.innerHTML='<div class="big">＋</div>この余白を長押しして<br>最初のイベントを追加';
+    hint.style.cursor='pointer';
+    let lpT=null;
+    hint.addEventListener('touchstart',()=>{lpT=setTimeout(()=>{getEvents().push(mkEvent('新しいイベント',null,60));renderTimeline();saveToFirestore();},500);},{passive:true});
+    hint.addEventListener('touchend',()=>clearTimeout(lpT));
+    hint.addEventListener('mousedown',()=>{lpT=setTimeout(()=>{getEvents().push(mkEvent('新しいイベント',null,60));renderTimeline();saveToFirestore();},500);});
+    hint.addEventListener('mouseup',()=>clearTimeout(lpT));
+    tl.appendChild(hint);
     setupDragDrop();return;
   }
 
@@ -1124,7 +1137,17 @@ function renderTimeline(){
 
     tl.appendChild(makeDZ(i));
 
-    const wrap=document.createElement('div');wrap.className='ev-wrap';
+    const wrap=document.createElement('div');wrap.className='ev-wrap';wrap.style.position='relative';
+    // 削除バッジ（長押し後表示）
+    const badge=document.createElement('div');badge.className='ev-delete-badge';badge.textContent='✕';
+    badge.addEventListener('pointerdown',ev=>{ev.stopPropagation();});
+    badge.addEventListener('click',ev=>{
+      ev.stopPropagation();
+      exitJiggle();
+      getEvents().splice(i,1);
+      renderTimeline();saveToFirestore();
+    });
+    wrap.appendChild(badge);
     const row=document.createElement('div');row.className='ev-row';
 
     const left=document.createElement('div');left.className='ev-left';
