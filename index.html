@@ -368,12 +368,13 @@ function mkEvent(name,fixedTime,dur){return{id:nextId++,name,fixedTime,dur,check
 
 // ── 同期ロジック ──────────────────────────────────────────
 // 設計方針:
-//   1. 自分の書き込みエコー（hasPendingWrites=true）は無視
-//   2. 入力中（isEditing）は他人の更新をキューに溜め、編集終了後に適用
-//   3. 保存中（hasPendingSave=true）はキューを適用しない（stale closure防止）
+//   - clientId で「自分の保存」と「他人の保存」を確実に区別する
+//   - 自分の保存エコー（ローカル + サーバー確認）は完全に無視
+//   - 他人の更新は編集中のみキューに溜め、編集終了後に適用
+
+const clientId = crypto.randomUUID(); // このタブ固有のID
 
 let saveTimer = null;
-let hasPendingSave = false;
 let pendingSnap = null; // 編集中に届いた他人のスナップショット
 
 function isEditingNow() {
@@ -397,24 +398,21 @@ function applySnap(snap) {
 
 function saveToFirestore() {
   if (isSyncing) return;
-  hasPendingSave = true;
   clearTimeout(saveTimer);
   saveTimer = setTimeout(async () => {
     try {
-      await setDoc(doc(db, "trips", tripId), { days, tripName: document.getElementById('tripName').value });
+      await setDoc(doc(db, "trips", tripId), {
+        days,
+        tripName: document.getElementById('tripName').value,
+        _lastEditor: clientId  // 「誰が最後に保存したか」を記録
+      });
     } catch(e) { console.error('save error', e); }
-    finally {
-      hasPendingSave = false;
-      saveTimer = null;
-      // 保存完了後、編集中でなければキューのスナップを適用
-      if (pendingSnap && !isEditingNow()) applySnap(pendingSnap);
-    }
   }, 500);
 }
 
 // Firestoreからリアルタイム受信
 onSnapshot(doc(db, "trips", tripId), (snap) => {
-  // ① 自分自身の書き込みエコーはスキップ（Firestoreはローカル書き込みでもonSnapshotを発火する）
+  // ① ローカル書き込みエコー（サーバー確認前）は無視
   if (snap.metadata.hasPendingWrites) return;
 
   if (!snap.exists()) {
@@ -436,23 +434,22 @@ onSnapshot(doc(db, "trips", tripId), (snap) => {
     return;
   }
 
-  // ② 自分が入力中 or 保存中はキューに入れて後で適用（stale closure / 上書き防止）
-  if (isEditingNow() || hasPendingSave) {
+  // ② サーバー確認済みでも自分の保存なら無視（自分のデータはメモリが正）
+  if (snap.data()._lastEditor === clientId) return;
+
+  // ③ 他人の更新：編集中はキュー、そうでなければ即適用
+  if (isEditingNow()) {
     pendingSnap = snap;
     return;
   }
-
   applySnap(snap);
 });
 
-// 入力終了時（blur）にキューのスナップショットを適用
+// 入力終了時（blur）にキューの他人スナップを適用
 document.addEventListener('blur', (e) => {
   if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA') return;
-  // 少し待ってフォーカスが別のinputに移っていないか確認してから適用
   setTimeout(() => {
-    if (!isEditingNow() && !hasPendingSave && pendingSnap) {
-      applySnap(pendingSnap);
-    }
+    if (!isEditingNow() && pendingSnap) applySnap(pendingSnap);
   }, 200);
 }, true);
 
