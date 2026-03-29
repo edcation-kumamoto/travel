@@ -1,105 +1,152 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>旅のしおり</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
-html,body{font-family:var(--font-sans);background:var(--color-background-tertiary);min-height:100vh;touch-action:pan-y}
-.app{max-width:400px;margin:0 auto;padding:0 0 80px}
+html,body{font-family:'M PLUS Rounded 1c',sans-serif;background:#F5C842;min-height:100vh;touch-action:pan-y}
 
-/* ヘッダー */
-.app-head{background:#2E7D78;padding:16px 16px 20px;border-radius:0 0 24px 24px;position:sticky;top:0;z-index:100;box-shadow:0 2px 12px rgba(0,0,0,.15)}
-.trip-name-row{display:flex;align-items:center;justify-content:center;margin-bottom:10px}
-.trip-name{font-size:18px;font-weight:500;color:#F5C842;background:transparent;border:none;outline:none;text-align:center;font-family:var(--font-sans);width:180px}
+/* 背景デコ */
+body::before{content:'';position:fixed;inset:0;background:
+  radial-gradient(circle at 10% 20%, rgba(255,255,255,.15) 0%, transparent 40%),
+  radial-gradient(circle at 90% 80%, rgba(255,200,50,.2) 0%, transparent 40%);
+pointer-events:none;z-index:0}
+
+.app{max-width:100%;margin:0 auto;padding:0 0 100px;position:relative;z-index:1}
+
+/* ── ヘッダー ── */
+.app-head{background:linear-gradient(135deg,#2E7D78 0%,#1a5c58 100%);padding:16px 16px 22px;border-radius:0 0 28px 28px;position:sticky;top:0;z-index:100;box-shadow:0 4px 20px rgba(0,0,0,.2)}
+.trip-name-row{display:flex;align-items:center;justify-content:center;margin-bottom:10px;gap:6px}
+.trip-icon{font-size:20px}
+.trip-name{font-size:20px;font-weight:700;color:#F5C842;background:transparent;border:none;outline:none;text-align:center;font-family:'M PLUS Rounded 1c',sans-serif;width:180px;letter-spacing:.02em}
 .trip-name::placeholder{color:rgba(245,200,66,.4)}
-.date-nav{display:flex;align-items:center;justify-content:center;gap:0}
-.nav-btn{width:44px;height:44px;border:none;background:transparent;color:rgba(255,255,255,.8);font-size:22px;cursor:pointer;display:flex;align-items:center;justify-content:center;border-radius:50%;transition:background .15s;touch-action:manipulation}
-.nav-btn:active{background:rgba(255,255,255,.15)}
+.date-nav{display:flex;align-items:center;justify-content:center}
+.nav-btn{width:48px;height:48px;border:none;background:rgba(255,255,255,.1);color:#fff;font-size:22px;cursor:pointer;display:flex;align-items:center;justify-content:center;border-radius:50%;transition:all .15s;touch-action:manipulation;backdrop-filter:blur(4px)}
+.nav-btn:active{background:rgba(255,255,255,.25);transform:scale(.9)}
 .date-center{flex:1;text-align:center}
-.date-display{font-size:18px;font-weight:500;color:#fff;letter-spacing:.03em;line-height:1.2}
-.day-label{font-size:11px;color:rgba(255,255,255,.6);margin-top:2px}
-.date-dots{display:flex;justify-content:center;gap:5px;margin-top:8px}
-.dot{width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,.3);transition:all .2s;cursor:pointer}
-.dot.active{background:#F5C842;transform:scale(1.3)}
+.date-display{font-size:19px;font-weight:700;color:#fff;letter-spacing:.03em;line-height:1.2}
+.day-label{font-size:11px;color:rgba(255,255,255,.65);margin-top:3px}
+.date-dots{display:flex;justify-content:center;gap:6px;margin-top:10px}
+.dot{width:7px;height:7px;border-radius:50%;background:rgba(255,255,255,.3);transition:all .25s;cursor:pointer}
+.dot.active{background:#F5C842;transform:scale(1.5);box-shadow:0 0 6px rgba(245,200,66,.6)}
 .dot.has-event{background:rgba(255,255,255,.65)}
-.add-day-btn{display:block;margin:8px auto 0;background:transparent;border:1px solid rgba(255,255,255,.3);border-radius:20px;padding:3px 12px;font-size:11px;color:rgba(255,255,255,.7);cursor:pointer;font-family:var(--font-sans);touch-action:manipulation}
-.add-day-btn:active{background:rgba(255,255,255,.1)}
+.add-day-btn{display:block;margin:10px auto 0;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.3);border-radius:20px;padding:5px 16px;font-size:12px;color:rgba(255,255,255,.85);cursor:pointer;font-family:'M PLUS Rounded 1c',sans-serif;touch-action:manipulation;transition:all .15s}
+.add-day-btn:active{background:rgba(255,255,255,.25)}
 
-/* タイムライン */
-.timeline-area{padding:12px 12px 4px}
-.empty-hint{text-align:center;padding:40px 20px;color:var(--color-text-tertiary);font-size:13px}
-.empty-hint .big{font-size:32px;margin-bottom:8px}
+/* ── タイムライン ── */
+.timeline-area{padding:16px 10px 8px}
+.empty-hint{text-align:center;padding:50px 20px;color:#7a6010;font-size:14px}
+.empty-hint .big{font-size:40px;margin-bottom:10px}
 
-/* ドロップゾーン */
-.drop-zone{height:4px;border-radius:4px;transition:all .15s;margin:0 52px}
-.drop-zone.over{height:28px;background:rgba(46,125,120,.2);margin:2px 52px;border-radius:8px;display:flex;align-items:center;justify-content:center}
-.drop-zone.over::after{content:'ここに追加';font-size:10px;color:#2E7D78;font-weight:500}
+/* ── ドロップゾーン ── */
+.drop-zone{height:6px;border-radius:4px;transition:all .15s;margin:0 60px}
+.drop-zone.over{height:32px;background:rgba(46,125,120,.18);margin:2px 60px;border-radius:10px;display:flex;align-items:center;justify-content:center;border:2px dashed rgba(46,125,120,.4)}
+.drop-zone.over::after{content:'ここに追加 ✈️';font-size:11px;color:#2E7D78;font-weight:700}
 
-/* イベント */
+/* ── イベント行 ── */
 .ev-wrap{position:relative}
-.ev-wrap.dragging{opacity:.35}
-.ev-row{display:flex;align-items:flex-start}
-.ev-left{width:54px;flex-shrink:0;display:flex;flex-direction:column;align-items:flex-end;padding-right:8px;padding-top:10px}
-.ev-time{font-size:13px;font-weight:500;color:#1a4a47;cursor:pointer;padding:3px 5px;border-radius:6px;line-height:1;white-space:nowrap;transition:background .15s}
-.ev-time:hover,.ev-time:focus{background:rgba(255,255,255,.6)}
-.ev-time.fixed{color:#c0392b;background:rgba(192,57,43,.1)}
-.ev-right{flex:1}
-.ev-card{background:#fff;border-radius:14px;padding:8px 10px;display:flex;align-items:center;gap:6px;min-height:40px}
-.drag-handle{font-size:14px;color:#ccc;cursor:grab;line-height:1;flex-shrink:0;padding:4px 0;touch-action:none}
+.ev-wrap.dragging{opacity:.3;transform:scale(.97)}
+.ev-row{display:flex;align-items:flex-start;gap:0}
+
+/* 時刻バッジ */
+.ev-left{width:64px;flex-shrink:0;display:flex;flex-direction:column;align-items:center;padding-top:8px;gap:3px}
+.ev-time-badge{display:flex;flex-direction:column;align-items:center;cursor:pointer;touch-action:manipulation}
+.ev-time-dot{width:12px;height:12px;border-radius:50%;background:#2E7D78;border:2.5px solid #F5C842;box-shadow:0 0 0 2px #2E7D78;transition:all .2s;flex-shrink:0}
+.ev-time-dot.fixed{background:#ef4444;box-shadow:0 0 0 2px #ef4444}
+.ev-time{font-size:12px;font-weight:700;color:#1a5c58;padding:2px 4px;border-radius:6px;line-height:1;white-space:nowrap;background:rgba(255,255,255,.7);margin-top:2px;text-align:center;min-width:46px}
+.ev-time.fixed{color:#c0392b;background:rgba(255,220,220,.85)}
+
+/* イベントカード */
+.ev-right{flex:1;min-width:0;padding-left:2px}
+.ev-card{background:#fff;border-radius:16px;padding:10px 12px;display:flex;align-items:center;gap:8px;min-height:48px;box-shadow:0 2px 10px rgba(0,0,0,.1);border-left:5px solid #2E7D78;position:relative;overflow:hidden;transition:box-shadow .2s}
+.ev-card::after{content:'';position:absolute;top:0;right:0;bottom:0;width:3px;border-radius:0 16px 16px 0}
+.ev-cat-icon{font-size:20px;flex-shrink:0;line-height:1;filter:drop-shadow(0 1px 2px rgba(0,0,0,.1))}
+.drag-handle{font-size:13px;color:#ddd;cursor:grab;line-height:1;flex-shrink:0;touch-action:none;padding:2px}
 .drag-handle:active{cursor:grabbing}
-.ev-name{font-size:13px;font-weight:500;color:var(--color-text-primary);background:transparent;border:none;outline:none;flex:1;font-family:var(--font-sans);min-width:0}
+.ev-name{font-size:14px;font-weight:600;color:#1a1a1a;background:transparent;border:none;outline:none;flex:1;font-family:'M PLUS Rounded 1c',sans-serif;min-width:0}
 .ev-name::placeholder{color:#ccc;font-weight:400}
-.list-toggle{width:24px;height:24px;border-radius:7px;border:none;background:rgba(46,125,120,.12);color:#2E7D78;font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;touch-action:manipulation}
+.list-toggle{width:28px;height:28px;border-radius:9px;border:none;background:rgba(46,125,120,.1);color:#2E7D78;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;touch-action:manipulation;font-weight:700;transition:all .15s}
 .list-toggle.open{background:#2E7D78;color:#fff}
 
-/* チェックリスト */
-.checklist{background:rgba(255,255,255,.72);border-radius:0 0 14px 14px;margin-top:-4px;padding:6px 10px 8px;display:none}
-.checklist.open{display:block}
-.check-item{display:flex;align-items:center;gap:6px;padding:5px 0;border-bottom:.5px solid rgba(0,0,0,.06)}
+/* カード カテゴリ別カラー */
+.ev-card.cat-flight{border-left-color:#3b82f6;background:linear-gradient(to right,#eff6ff,#fff 30%)}
+.ev-card.cat-train{border-left-color:#8b5cf6;background:linear-gradient(to right,#f5f3ff,#fff 30%)}
+.ev-card.cat-car{border-left-color:#f59e0b;background:linear-gradient(to right,#fffbeb,#fff 30%)}
+.ev-card.cat-hotel{border-left-color:#ec4899;background:linear-gradient(to right,#fdf2f8,#fff 30%)}
+.ev-card.cat-food{border-left-color:#ef4444;background:linear-gradient(to right,#fef2f2,#fff 30%)}
+.ev-card.cat-sight{border-left-color:#10b981;background:linear-gradient(to right,#ecfdf5,#fff 30%)}
+.ev-card.cat-rest{border-left-color:#6b7280;background:linear-gradient(to right,#f9fafb,#fff 30%)}
+.ev-card.cat-park{border-left-color:#f97316;background:linear-gradient(to right,#fff7ed,#fff 30%)}
+
+/* チェックリスト（パステルブルー） */
+.checklist{border-radius:0 0 16px 16px;margin-top:-4px;padding:8px 12px 10px;display:none;border-left:5px solid transparent}
+.checklist.open{display:block;background:linear-gradient(150deg,#dbeafe,#bfdbfe);border-top:1.5px solid rgba(147,197,253,.5);border-left-color:#93c5fd}
+.check-item{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:.5px solid rgba(147,197,253,.4)}
 .check-item:last-of-type{border-bottom:none}
-.check-box{width:20px;height:20px;border-radius:6px;border:1.5px solid #bbb;background:#fff;cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;transition:all .15s;touch-action:manipulation}
-.check-box.checked{background:#2E7D78;border-color:#2E7D78;color:#fff;font-size:12px}
-.check-text{font-size:12px;color:var(--color-text-primary);background:transparent;border:none;outline:none;flex:1;font-family:var(--font-sans)}
-.check-text.done{text-decoration:line-through;color:var(--color-text-tertiary)}
-.check-del{width:18px;height:18px;border-radius:50%;border:none;background:transparent;color:#ccc;font-size:13px;cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;touch-action:manipulation}
-.add-check{display:flex;align-items:center;gap:6px;padding:5px 0;margin-top:2px}
-.add-check-input{font-size:12px;color:var(--color-text-secondary);background:transparent;border:none;outline:none;flex:1;font-family:var(--font-sans)}
-.add-check-input::placeholder{color:#bbb}
+.check-box{width:22px;height:22px;border-radius:7px;border:2px solid #93c5fd;background:#fff;cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;transition:all .15s;touch-action:manipulation;font-size:13px}
+.check-box.checked{background:#3b82f6;border-color:#3b82f6;color:#fff}
+.check-text{font-size:13px;color:#1e3a5f;background:transparent;border:none;outline:none;flex:1;font-family:'M PLUS Rounded 1c',sans-serif}
+.check-text.done{text-decoration:line-through;color:#93c5fd}
+.check-del{width:20px;height:20px;border-radius:50%;border:none;background:transparent;color:#93c5fd;font-size:14px;cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center}
+.add-check{display:flex;align-items:center;gap:8px;padding:7px 0;margin-top:2px}
+.add-check-input{font-size:13px;color:#1e3a5f;background:transparent;border:none;outline:none;flex:1;font-family:'M PLUS Rounded 1c',sans-serif}
+.add-check-input::placeholder{color:#93c5fd}
 
-/* コネクター */
-.connector{display:flex;align-items:stretch}
-.conn-left{width:54px;flex-shrink:0;display:flex;justify-content:flex-end;padding-right:8px}
-.conn-bar-col{display:flex;flex-direction:column;align-items:center;width:20px}
-.conn-bar{width:3px;background:#2E7D78;opacity:.4;border-radius:2px;flex:1;min-height:8px}
-.conn-right{flex:1;display:flex;align-items:center;justify-content:center}
-.dur-btn{display:flex;align-items:center;gap:4px;cursor:pointer;padding:6px 12px;border-radius:20px;background:rgba(46,125,120,.12);border:none;font-family:var(--font-sans);font-size:12px;font-weight:500;color:#2E7D78;touch-action:manipulation}
-.dur-btn:active{background:rgba(46,125,120,.22)}
+/* ── コネクター（旅路） ── */
+.connector{display:flex;align-items:stretch;position:relative}
+.conn-left{width:64px;flex-shrink:0;display:flex;justify-content:center;align-items:flex-start;padding-top:0}
+.conn-line-wrap{display:flex;flex-direction:column;align-items:center;width:12px}
+.conn-line{flex:1;width:3px;background:repeating-linear-gradient(to bottom,#2E7D78 0,#2E7D78 6px,transparent 6px,transparent 12px);border-radius:2px;min-height:12px;opacity:.55}
+.conn-right{flex:1;display:flex;align-items:center;padding:6px 0}
+.journey-badge{display:flex;align-items:center;gap:6px;padding:7px 14px;border-radius:22px;background:rgba(255,255,255,.75);border:none;font-family:'M PLUS Rounded 1c',sans-serif;font-size:12px;font-weight:700;color:#2E7D78;cursor:pointer;touch-action:manipulation;backdrop-filter:blur(4px);box-shadow:0 1px 6px rgba(0,0,0,.08);transition:all .15s}
+.journey-badge:active{transform:scale(.95);background:rgba(255,255,255,.95)}
+.journey-icon{font-size:15px}
+.journey-dur{font-size:13px;font-weight:700;color:#1a5c58}
+.journey-label{font-size:10px;color:#6b9e9b;font-weight:500}
 
-/* ボトム */
-.bottom-bar{display:flex;align-items:center;justify-content:space-between;padding:8px 12px 16px;gap:8px}
-.palette-chip{background:#fff;border:2px dashed #2E7D78;border-radius:20px;padding:8px 14px;font-size:13px;font-weight:500;color:#2E7D78;cursor:grab;display:flex;align-items:center;gap:6px;flex:1;justify-content:center;touch-action:none}
-.palette-chip:active{cursor:grabbing;background:rgba(46,125,120,.06)}
-.trash{width:44px;height:44px;border-radius:var(--border-radius-lg);background:rgba(192,57,43,.1);border:1.5px dashed #c0392b;display:flex;align-items:center;justify-content:center;font-size:20px;transition:all .15s;flex-shrink:0}
-.trash.over{background:rgba(192,57,43,.2);border-style:solid}
+/* ── ボトムバー ── */
+.bottom-bar{display:flex;align-items:center;justify-content:space-between;padding:10px 12px 18px;gap:8px;position:sticky;bottom:0;background:linear-gradient(to top,#F5C842 65%,transparent);z-index:50}
+.palette-chip{background:#fff;border:2.5px dashed #2E7D78;border-radius:24px;padding:12px 14px;font-size:14px;font-weight:700;color:#2E7D78;cursor:grab;display:flex;align-items:center;gap:6px;flex:1;justify-content:center;touch-action:none;font-family:'M PLUS Rounded 1c',sans-serif;box-shadow:0 2px 10px rgba(0,0,0,.08);transition:all .15s}
+.palette-chip:active{cursor:grabbing;background:rgba(46,125,120,.06);transform:scale(.97)}
+.trash{width:48px;height:48px;border-radius:16px;background:rgba(239,68,68,.1);border:2px dashed #ef4444;display:flex;align-items:center;justify-content:center;font-size:20px;transition:all .15s;flex-shrink:0}
+.trash.over{background:rgba(239,68,68,.2);border-style:solid;transform:scale(1.1)}
 
-/* ピッカー */
-.dur-picker{position:fixed;z-index:900;background:var(--color-background-primary);border:.5px solid var(--color-border-secondary);border-radius:var(--border-radius-lg);box-shadow:0 4px 20px rgba(0,0,0,.15);width:120px;overflow:hidden;display:none}
+/* ── ピッカー ── */
+.dur-picker{position:fixed;z-index:900;background:#fff;border:.5px solid #e0e0e0;border-radius:18px;box-shadow:0 8px 30px rgba(0,0,0,.15);width:130px;overflow:hidden;display:none}
 .dur-inner{height:160px;overflow-y:scroll;scroll-snap-type:y mandatory;scrollbar-width:none}
 .dur-inner::-webkit-scrollbar{display:none}
-.dur-item{height:40px;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:500;scroll-snap-align:center;cursor:pointer;color:var(--color-text-primary);touch-action:manipulation}
-.dur-item.sel{color:#2E7D78}
-.dur-hl{position:absolute;left:0;right:0;top:60px;height:40px;border-top:1.5px solid #2E7D78;border-bottom:1.5px solid #2E7D78;pointer-events:none}
+.dur-item{height:40px;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:500;scroll-snap-align:center;cursor:pointer;color:#1a1a1a;font-family:'M PLUS Rounded 1c',sans-serif}
+.dur-item.sel{color:#2E7D78;font-weight:700}
+.dur-hl{position:absolute;left:0;right:0;top:60px;height:40px;border-top:2px solid #2E7D78;border-bottom:2px solid #2E7D78;pointer-events:none}
 
-/* 時刻ポップアップ */
-.time-popup{position:fixed;z-index:950;background:var(--color-background-primary);border:.5px solid var(--color-border-secondary);border-radius:var(--border-radius-lg);box-shadow:0 4px 20px rgba(0,0,0,.15);padding:14px;width:190px;display:none}
-.tp-label{font-size:11px;color:var(--color-text-secondary);margin-bottom:6px}
-.tp-input{width:100%;font-size:24px;font-weight:500;color:var(--color-text-primary);background:var(--color-background-secondary);border:.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);padding:7px 8px;text-align:center;outline:none;font-family:var(--font-mono);margin-bottom:10px}
+/* ── 時刻ポップアップ ── */
+.time-popup{position:fixed;z-index:950;background:#fff;border:.5px solid #e0e0e0;border-radius:18px;box-shadow:0 8px 30px rgba(0,0,0,.15);padding:16px;width:200px;display:none}
+.tp-label{font-size:11px;color:#666;margin-bottom:8px;font-family:'M PLUS Rounded 1c',sans-serif}
+.tp-input{width:100%;font-size:26px;font-weight:700;color:#1a1a1a;background:#f5f5f5;border:2px solid #e0e0e0;border-radius:12px;padding:8px;text-align:center;outline:none;font-family:monospace;margin-bottom:10px;transition:border-color .15s}
 .tp-input:focus{border-color:#2E7D78}
-.tp-btns{display:flex;gap:6px}
-.tp-fix{flex:1;padding:7px;border-radius:var(--border-radius-md);border:.5px solid var(--color-border-secondary);background:transparent;font-size:12px;font-family:var(--font-sans);cursor:pointer;color:var(--color-text-primary)}
-.tp-fix.on{background:rgba(192,57,43,.1);border-color:rgba(192,57,43,.4);color:#c0392b;font-weight:500}
-.tp-ok{flex:1;padding:7px;border-radius:var(--border-radius-md);border:none;background:#2E7D78;color:#fff;font-size:12px;font-family:var(--font-sans);cursor:pointer}
+.tp-btns{display:flex;gap:8px}
+.tp-fix{flex:1;padding:9px;border-radius:12px;border:1.5px solid #e0e0e0;background:transparent;font-size:12px;font-family:'M PLUS Rounded 1c',sans-serif;cursor:pointer;color:#555;font-weight:600}
+.tp-fix.on{background:rgba(239,68,68,.08);border-color:rgba(239,68,68,.4);color:#ef4444;font-weight:700}
+.tp-ok{flex:1;padding:9px;border-radius:12px;border:none;background:linear-gradient(135deg,#2E7D78,#1a5c58);color:#fff;font-size:12px;font-family:'M PLUS Rounded 1c',sans-serif;cursor:pointer;font-weight:700}
+
+/* アニメ */
+@keyframes slideIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.ev-wrap{animation:slideIn .25s ease}
 </style>
+</head>
+<body>
 
 <div class="app" id="app">
   <div class="app-head">
     <div class="trip-name-row">
+      <span class="trip-icon">🗺️</span>
       <input class="trip-name" id="tripName" value="旅のしおり" placeholder="旅行名">
     </div>
     <div class="date-nav">
@@ -118,7 +165,7 @@ html,body{font-family:var(--font-sans);background:var(--color-background-tertiar
 
   <div class="bottom-bar">
     <div class="palette-chip" id="paletteChip">
-      <span style="font-size:16px;line-height:1">＋</span> ドラッグして追加
+      <span style="font-size:18px">＋</span> ドラッグして追加
     </div>
     <div class="trash" id="trash">🗑</div>
   </div>
@@ -131,26 +178,25 @@ html,body{font-family:var(--font-sans);background:var(--color-background-tertiar
   </div>
 </div>
 <div class="time-popup" id="timePopup">
-  <div class="tp-label">時刻を入力（HH:MM）</div>
+  <div class="tp-label">⏱ 時刻を入力（HH:MM）</div>
   <input class="tp-input" id="tpInput" type="text" placeholder="09:00" maxlength="5">
   <div class="tp-btns">
     <button class="tp-fix" id="tpFix">🔒 固定</button>
-    <button class="tp-ok" id="tpOk">OK</button>
+    <button class="tp-ok" id="tpOk">OK ✓</button>
   </div>
 </div>
 
 <script>
 const STEP=5,MAX_DUR=300;
 let nextId=100;
-// days: [{date:'10/10', events:[...]}, ...]
 let days=[];
 let curDay=0;
-let dragSrc=null,dragEl=null;
+let dragSrc=null;
 let durPickerIdx=null,timePopupIdx=null,tpFixed=false;
+let touchDragData=null,touchClone=null;
 
 function mkEvent(name,fixedTime,dur){return{id:nextId++,name,fixedTime,dur,checks:[],open:false};}
 
-// デフォルトデータ
 days=[{
   date:'10/10',
   events:[
@@ -166,6 +212,44 @@ days=[{
 }];
 
 function getEvents(){return days[curDay]?days[curDay].events:[];}
+
+/* ── カテゴリ判定 ── */
+const CATS={
+  flight:{icon:'✈️',cls:'cat-flight',move:'✈️'},
+  train:{icon:'🚂',cls:'cat-train',move:'🚂'},
+  car:{icon:'🚗',cls:'cat-car',move:'🚗'},
+  hotel:{icon:'🏨',cls:'cat-hotel',move:'🛏️'},
+  food:{icon:'🍽️',cls:'cat-food',move:'🍴'},
+  sight:{icon:'🗺️',cls:'cat-sight',move:'🚶'},
+  rest:{icon:'☕',cls:'cat-rest',move:'☕'},
+  park:{icon:'🅿️',cls:'cat-park',move:'🚗'},
+  def:{icon:'📍',cls:'',move:'🚗'},
+};
+function detectCat(name){
+  const n=name;
+  if(/空港|飛行機|フライト|羽田|伊丹|関空|成田|ANA|JAL|チェックイン/.test(n)) return 'flight';
+  if(/電車|新幹線|バス|地下鉄|JR|乗車|下車|駅/.test(n)) return 'train';
+  if(/出発|ドライブ|車/.test(n)) return 'car';
+  if(/ホテル|旅館|宿|チェックアウト|inn/.test(n)) return 'hotel';
+  if(/食事|ランチ|ディナー|朝食|夕食|レストラン|カフェ|ラーメン|寿司|食/.test(n)) return 'food';
+  if(/観光|神社|寺|公園|城|博物館|美術館|ショッピング|散策|散歩/.test(n)) return 'sight';
+  if(/ラウンジ|休憩|休み|カフェ/.test(n)) return 'rest';
+  if(/駐車/.test(n)) return 'park';
+  return 'def';
+}
+
+/* 所要時間からアイコン推定 */
+function moveIcon(dur,fromCat,toCat){
+  if(fromCat==='car'||toCat==='car') return '🚗';
+  if(fromCat==='flight'||toCat==='flight') return '✈️';
+  if(fromCat==='train'||toCat==='train') return '🚂';
+  if(dur==null) return '🚗';
+  if(dur===0) return '🚶';
+  if(dur<=20) return '🚶';
+  if(dur<=60) return '🚗';
+  if(dur<=120) return '🚂';
+  return '✈️';
+}
 
 /* ── 時刻計算 ── */
 function parseT(s){if(!s||!s.includes(':'))return null;const[h,m]=s.split(':').map(Number);return isNaN(h)||isNaN(m)?null:h*60+m}
@@ -183,11 +267,10 @@ function computeTimes(evs){
   let cur=null;
   for(let i=0;i<n;i++){
     if(evs[i].fixedTime){cur=parseT(evs[i].fixedTime);times[i]=cur;}
-    else if(cur!==null&&i>0){const d=evs[i-1].dur;if(d!=null&&!isNaN(d)){cur=cur+d;times[i]=cur;}else cur=null;}
+    else if(cur!==null&&i>0){const d=evs[i-1].dur;if(d!=null&&!isNaN(d)){cur+=d;times[i]=cur;}else cur=null;}
   }
   return times;
 }
-
 function maxDurFor(idx,times,evs){
   for(let j=idx+1;j<evs.length;j++){
     if(evs[j].fixedTime){
@@ -198,57 +281,37 @@ function maxDurFor(idx,times,evs){
   return MAX_DUR;
 }
 
-/* ── 日付ナビ ── */
-function goDay(d){
-  curDay=Math.max(0,Math.min(days.length-1,d));
-  renderHeader();
-  renderTimeline();
-}
-
+/* ── ナビ ── */
+function goDay(d){curDay=Math.max(0,Math.min(days.length-1,d));renderHeader();renderTimeline();}
 document.getElementById('prevDay').addEventListener('click',()=>goDay(curDay-1));
 document.getElementById('nextDay').addEventListener('click',()=>goDay(curDay+1));
-
 document.getElementById('addDayBtn').addEventListener('click',()=>{
   const last=days[days.length-1];
-  let newDate='';
-  if(last&&last.date){
-    const parts=last.date.split('/');
-    if(parts.length===2){
-      const m=parseInt(parts[0]),d=parseInt(parts[1]);
-      newDate=`${m}/${d+1}`;
-    }
-  } else newDate='';
-  days.push({date:newDate,events:[]});
-  curDay=days.length-1;
-  renderHeader();renderTimeline();
+  let nd='';
+  if(last&&last.date){const p=last.date.split('/');if(p.length===2)nd=`${p[0]}/${+p[1]+1}`;}
+  days.push({date:nd,events:[]});curDay=days.length-1;renderHeader();renderTimeline();
 });
 
 function renderHeader(){
   const d=days[curDay];
   const disp=document.getElementById('dateDisplay');
   const lbl=document.getElementById('dayLabel');
-  const prev=document.getElementById('prevDay');
-  const next=document.getElementById('nextDay');
-
+  document.getElementById('prevDay').style.opacity=curDay<=0?.3:1;
+  document.getElementById('nextDay').style.opacity=curDay>=days.length-1?.3:1;
   if(!d){disp.textContent='—';lbl.textContent='日程を追加してください';}
   else{
-    // editable date
     disp.innerHTML='';
     const inp=document.createElement('input');
     inp.value=d.date;inp.placeholder='日付を入力';
-    inp.style.cssText='background:transparent;border:none;outline:none;text-align:center;font-family:var(--font-sans);font-size:18px;font-weight:500;color:#fff;width:140px';
+    inp.style.cssText='background:transparent;border:none;outline:none;text-align:center;font-family:"M PLUS Rounded 1c",sans-serif;font-size:19px;font-weight:700;color:#fff;width:150px';
     inp.addEventListener('input',function(){days[curDay].date=this.value;renderDots();});
     disp.appendChild(inp);
     lbl.textContent=`${curDay+1}日目 / 全${days.length}日`;
   }
-  prev.style.opacity=curDay<=0?.3:1;
-  next.style.opacity=curDay>=days.length-1?.3:1;
   renderDots();
 }
-
 function renderDots(){
-  const dots=document.getElementById('dateDots');
-  dots.innerHTML='';
+  const dots=document.getElementById('dateDots');dots.innerHTML='';
   days.forEach((d,i)=>{
     const dot=document.createElement('div');
     dot.className='dot'+(i===curDay?' active':d.events.length?' has-event':'');
@@ -257,96 +320,67 @@ function renderDots(){
   });
 }
 
-/* ── ドラッグ（マウス＋タッチ両対応） ── */
-let touchDragData=null;
-let touchClone=null;
-
+/* ── ドラッグ ── */
 function setupDragDrop(){
   const chip=document.getElementById('paletteChip');
   const trash=document.getElementById('trash');
-
-  // palette mouse
-  chip.onmousedown=null;chip.ondragstart=null;
   chip.draggable=true;
   chip.addEventListener('dragstart',e=>{dragSrc='palette';e.dataTransfer.effectAllowed='copy';e.dataTransfer.setData('text/plain','palette');});
   chip.addEventListener('dragend',()=>{dragSrc=null;cleanDZ();});
-
-  // palette touch
   chip.addEventListener('touchstart',e=>{
-    const t=e.touches[0];
-    touchDragData={src:'palette',startX:t.clientX,startY:t.clientY};
+    const t=e.touches[0];touchDragData={src:'palette'};
     createTouchClone('＋ 新イベント',t.clientX,t.clientY);
   },{passive:true});
-
-  // trash mouse
   trash.addEventListener('dragover',e=>{e.preventDefault();trash.classList.add('over');});
   trash.addEventListener('dragleave',()=>trash.classList.remove('over'));
   trash.addEventListener('drop',e=>{
     e.preventDefault();trash.classList.remove('over');
     if(typeof dragSrc==='number'&&getEvents().length>1){getEvents().splice(dragSrc,1);dragSrc=null;renderTimeline();}
   });
-
-  // ev wraps mouse
   document.querySelectorAll('.ev-wrap').forEach((el,i)=>{
     el.draggable=true;
     el.addEventListener('dragstart',e=>{
-      if(e.target.closest('.ev-name,.list-toggle,.check-box,.check-text,.add-check-input,.ev-time,.dur-btn'))return e.preventDefault();
+      if(e.target.closest('.ev-name,.list-toggle,.check-box,.check-text,.add-check-input,.ev-time-badge,.journey-badge'))return e.preventDefault();
       dragSrc=i;e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('text/plain',String(i));
       setTimeout(()=>el.classList.add('dragging'),0);
     });
     el.addEventListener('dragend',()=>{el.classList.remove('dragging');dragSrc=null;cleanDZ();});
   });
-
-  // drag handle touch
   document.querySelectorAll('.drag-handle').forEach((handle,i)=>{
     handle.addEventListener('touchstart',e=>{
       e.stopPropagation();
       const t=e.touches[0];
-      touchDragData={src:i,startX:t.clientX,startY:t.clientY};
+      touchDragData={src:i};
       createTouchClone(getEvents()[i]?.name||'イベント',t.clientX,t.clientY);
     },{passive:true});
   });
-
-  // drop zones mouse
   document.querySelectorAll('.drop-zone').forEach(dz=>{
-    dz.addEventListener('dragover',e=>{e.preventDefault();e.dataTransfer.dropEffect=dragSrc==='palette'?'copy':'move';cleanDZ();dz.classList.add('over');});
+    dz.addEventListener('dragover',e=>{e.preventDefault();cleanDZ();dz.classList.add('over');});
     dz.addEventListener('dragleave',()=>dz.classList.remove('over'));
-    dz.addEventListener('drop',e=>{
-      e.preventDefault();
-      const ins=parseInt(dz.dataset.insert);
-      handleDrop(ins);
-    });
+    dz.addEventListener('drop',e=>{e.preventDefault();handleDrop(parseInt(dz.dataset.insert));});
   });
-
-  // trash touch
-  trash.addEventListener('touchstart',()=>{trash.classList.add('over');},{passive:true});
-  trash.addEventListener('touchend',()=>{trash.classList.remove('over');});
+  trash.addEventListener('touchstart',()=>trash.classList.add('over'),{passive:true});
+  trash.addEventListener('touchend',()=>trash.classList.remove('over'));
 }
-
 function createTouchClone(text,x,y){
   removeTouchClone();
   touchClone=document.createElement('div');
   touchClone.textContent=text;
-  touchClone.style.cssText=`position:fixed;left:${x-60}px;top:${y-20}px;width:120px;background:#2E7D78;color:#fff;border-radius:20px;padding:6px 12px;font-size:12px;font-weight:500;text-align:center;pointer-events:none;z-index:9999;opacity:.88;box-shadow:0 4px 16px rgba(0,0,0,.2)`;
+  touchClone.style.cssText=`position:fixed;left:${x-60}px;top:${y-20}px;width:120px;background:#2E7D78;color:#fff;border-radius:20px;padding:7px 12px;font-size:13px;font-weight:700;text-align:center;pointer-events:none;z-index:9999;opacity:.9;box-shadow:0 4px 20px rgba(0,0,0,.25);font-family:'M PLUS Rounded 1c',sans-serif`;
   document.body.appendChild(touchClone);
 }
 function removeTouchClone(){if(touchClone){touchClone.remove();touchClone=null;}}
-
 document.addEventListener('touchmove',e=>{
   if(!touchDragData)return;
   const t=e.touches[0];
   if(touchClone){touchClone.style.left=(t.clientX-60)+'px';touchClone.style.top=(t.clientY-20)+'px';}
-  // highlight drop zone under finger
   cleanDZ();
   const el=document.elementFromPoint(t.clientX,t.clientY);
   if(el){
-    const dz=el.closest('.drop-zone');
-    if(dz)dz.classList.add('over');
-    const tr=el.closest('#trash');
-    if(tr)tr.classList.add('over');
+    const dz=el.closest('.drop-zone');if(dz)dz.classList.add('over');
+    const tr=el.closest('#trash');if(tr)tr.classList.add('over');
   }
 },{passive:true});
-
 document.addEventListener('touchend',e=>{
   if(!touchDragData){removeTouchClone();return;}
   removeTouchClone();
@@ -354,14 +388,12 @@ document.addEventListener('touchend',e=>{
   const el=document.elementFromPoint(t.clientX,t.clientY);
   if(el){
     const dz=el.closest('.drop-zone');
-    if(dz){const ins=parseInt(dz.dataset.insert);handleDrop(ins,touchDragData.src);}
+    if(dz)handleDrop(parseInt(dz.dataset.insert),touchDragData.src);
     const tr=el.closest('#trash');
     if(tr&&typeof touchDragData.src==='number'&&getEvents().length>1){getEvents().splice(touchDragData.src,1);renderTimeline();}
   }
-  cleanDZ();
-  touchDragData=null;
+  cleanDZ();touchDragData=null;
 });
-
 function handleDrop(ins,src){
   const s=src!==undefined?src:dragSrc;
   const evs=getEvents();
@@ -371,18 +403,16 @@ function handleDrop(ins,src){
     setTimeout(()=>{const ns=document.querySelectorAll('.ev-name');if(ns[ins]){ns[ins].focus();ns[ins].select();}},50);
   } else if(typeof s==='number'&&s!==ins&&s!==ins-1){
     const moved=evs.splice(s,1)[0];
-    const ni=ins>s?ins-1:ins;
-    evs.splice(ni,0,moved);
+    evs.splice(ins>s?ins-1:ins,0,moved);
     dragSrc=null;renderTimeline();
-  } else {dragSrc=null;renderTimeline();}
+  } else{dragSrc=null;renderTimeline();}
 }
-
 function cleanDZ(){
   document.querySelectorAll('.drop-zone').forEach(z=>z.classList.remove('over'));
-  document.getElementById('trash').classList.remove('over');
+  const tr=document.getElementById('trash');if(tr)tr.classList.remove('over');
 }
 
-/* ── 所要時間ピッカー ── */
+/* ── ピッカー ── */
 function openDurPicker(idx,el){
   if(durPickerIdx===idx){closeDurPicker();return;}
   closeTimePopup();durPickerIdx=idx;
@@ -397,8 +427,8 @@ function openDurPicker(idx,el){
   });
   const p=document.getElementById('durPicker');p.style.display='block';
   const r=el.getBoundingClientRect();
-  p.style.top=(r.bottom+4+window.scrollY)+'px';
-  p.style.left=Math.max(4,Math.min(window.innerWidth-124,r.left+r.width/2-55))+'px';
+  p.style.top=(r.bottom+6+window.scrollY)+'px';
+  p.style.left=Math.max(4,Math.min(window.innerWidth-134,r.left+r.width/2-60))+'px';
   const si=opts.indexOf(cur);if(si>=0)inner.scrollTop=si*40;
   setTimeout(()=>document.addEventListener('click',durOut),10);
 }
@@ -415,8 +445,8 @@ function openTimePopup(idx,el){
   document.getElementById('tpFix').className='tp-fix'+(tpFixed?' on':'');
   const p=document.getElementById('timePopup');p.style.display='block';
   const r=el.getBoundingClientRect();
-  p.style.top=(r.bottom+4+window.scrollY)+'px';
-  p.style.left=Math.max(4,Math.min(window.innerWidth-194,r.left+r.width/2-95))+'px';
+  p.style.top=(r.bottom+6+window.scrollY)+'px';
+  p.style.left=Math.max(4,Math.min(window.innerWidth-204,r.left+r.width/2-100))+'px';
   document.getElementById('tpInput').focus();
   setTimeout(()=>document.addEventListener('click',timeOut),10);
 }
@@ -424,7 +454,7 @@ function applyTime(){
   if(timePopupIdx==null)return;
   const evs=getEvents(),val=document.getElementById('tpInput').value.trim(),parsed=parseT(val);
   if(parsed!=null){
-    if(tpFixed){evs[timePopupIdx].fixedTime=fmtT(parsed);}
+    if(tpFixed)evs[timePopupIdx].fixedTime=fmtT(parsed);
     else{
       evs[timePopupIdx].fixedTime=null;
       const times=computeTimes(evs);
@@ -462,8 +492,8 @@ function renderChecklist(evs,evIdx){
     row.appendChild(box);row.appendChild(inp);row.appendChild(del);cl.appendChild(row);
   });
   const ar=document.createElement('div');ar.className='add-check';
-  const plus=document.createElement('span');plus.textContent='＋';plus.style.cssText='font-size:13px;color:#2E7D78;flex-shrink:0';
-  const ai=document.createElement('input');ai.className='add-check-input';ai.placeholder='やることを追加';
+  const plus=document.createElement('span');plus.textContent='＋';plus.style.cssText='font-size:14px;color:#3b82f6;flex-shrink:0;font-family:"M PLUS Rounded 1c",sans-serif;font-weight:700';
+  const ai=document.createElement('input');ai.className='add-check-input';ai.placeholder='やることを追加…';
   ai.addEventListener('keydown',e=>{if(e.key==='Enter'&&ai.value.trim()){checks.push({text:ai.value.trim(),done:false});ai.value='';renderChecklist(evs,evIdx);}});
   ai.addEventListener('blur',()=>{if(ai.value.trim()){checks.push({text:ai.value.trim(),done:false});ai.value='';renderChecklist(evs,evIdx);}});
   ar.appendChild(plus);ar.appendChild(ai);cl.appendChild(ar);
@@ -478,8 +508,7 @@ function renderTimeline(){
   if(!evs.length){tl.innerHTML='<div class="empty-hint"><div class="big">✈️</div>下のチップをドラッグして<br>イベントを追加しましょう</div>';setupDragDrop();return;}
 
   const times=computeTimes(evs);
-  const allDurs=evs.slice(0,-1).map(e=>e.dur??0);
-  const maxDV=Math.max(...allDurs.filter(d=>d>0),60);
+  const cats=evs.map(e=>detectCat(e.name));
 
   function makeDZ(ins){
     const dz=document.createElement('div');dz.className='drop-zone';dz.dataset.insert=ins;return dz;
@@ -489,29 +518,49 @@ function renderTimeline(){
     const isLast=i===evs.length-1;
     const tStr=fmtT(times[i]);
     const isFixed=!!e.fixedTime;
+    const cat=cats[i];
+    const catInfo=CATS[cat];
 
     tl.appendChild(makeDZ(i));
 
+    /* ── イベントラッパー ── */
     const wrap=document.createElement('div');wrap.className='ev-wrap';
     const row=document.createElement('div');row.className='ev-row';
 
+    /* 時刻バッジ（左） */
     const left=document.createElement('div');left.className='ev-left';
-    const timeEl=document.createElement('div');
-    timeEl.className='ev-time'+(isFixed?' fixed':'');timeEl.textContent=tStr;
-    timeEl.addEventListener('click',ev=>{ev.stopPropagation();openTimePopup(i,timeEl);});
-    left.appendChild(timeEl);
+    const badge=document.createElement('div');badge.className='ev-time-badge';
+    badge.addEventListener('click',ev=>{ev.stopPropagation();openTimePopup(i,badge);});
+    const dot=document.createElement('div');dot.className='ev-time-dot'+(isFixed?' fixed':'');
+    const timeEl=document.createElement('div');timeEl.className='ev-time'+(isFixed?' fixed':'');timeEl.textContent=tStr;
+    badge.appendChild(dot);badge.appendChild(timeEl);
+    left.appendChild(badge);
 
+    /* イベントカード（右） */
     const right=document.createElement('div');right.className='ev-right';
-    const card=document.createElement('div');card.className='ev-card';
+    const card=document.createElement('div');
+    card.className='ev-card'+(cat&&cat!=='def'?' '+catInfo.cls:'');
+
+    /* カテゴリアイコン */
+    const icon=document.createElement('div');icon.className='ev-cat-icon';icon.textContent=catInfo.icon;
+
     const handle=document.createElement('div');handle.className='drag-handle';handle.textContent='⠿';
     const nameIn=document.createElement('input');nameIn.className='ev-name';nameIn.placeholder='イベント名';nameIn.value=e.name;
-    nameIn.addEventListener('input',function(){evs[i].name=this.value;});
+    nameIn.addEventListener('input',function(){
+      evs[i].name=this.value;
+      // カテゴリアイコン即時更新
+      const nc=detectCat(this.value);
+      icon.textContent=CATS[nc].icon;
+      card.className='ev-card'+(nc&&nc!=='def'?' '+CATS[nc].cls:'');
+    });
     nameIn.addEventListener('mousedown',ev=>ev.stopPropagation());
+
     const listBtn=document.createElement('button');listBtn.id='lt-'+i;
     listBtn.className='list-toggle'+(e.open?' open':'');listBtn.textContent=e.open?'−':'≡';
     listBtn.addEventListener('mousedown',ev=>ev.stopPropagation());
     listBtn.addEventListener('click',ev=>{ev.stopPropagation();toggleList(evs,i);});
-    card.appendChild(handle);card.appendChild(nameIn);card.appendChild(listBtn);
+
+    card.appendChild(icon);card.appendChild(handle);card.appendChild(nameIn);card.appendChild(listBtn);
     right.appendChild(card);
 
     const cl=document.createElement('div');cl.id='cl-'+i;cl.className='checklist'+(e.open?' open':'');
@@ -521,19 +570,26 @@ function renderTimeline(){
     tl.appendChild(wrap);
     renderChecklist(evs,i);
 
+    /* ── コネクター（旅路） ── */
     if(!isLast){
       const dur=e.dur??0;
-      const barH=Math.max(16,Math.round((dur/maxDV)*80));
-      const conn=document.createElement('div');conn.className='connector';conn.style.minHeight=(barH+28)+'px';
+      const nextCat=cats[i+1]||'def';
+      const mIcon=moveIcon(dur,cat,nextCat);
+      const durLabel=e.dur!=null?`${e.dur}分`:'? 分';
+
+      const conn=document.createElement('div');conn.className='connector';conn.style.minHeight='52px';
       const cL=document.createElement('div');cL.className='conn-left';
-      const bc=document.createElement('div');bc.className='conn-bar-col';bc.style.height='100%';
-      const bar=document.createElement('div');bar.className='conn-bar';bar.style.height=barH+'px';
-      bc.appendChild(bar);cL.appendChild(bc);
+      const lw=document.createElement('div');lw.className='conn-line-wrap';
+      const line=document.createElement('div');line.className='conn-line';
+      lw.appendChild(line);cL.appendChild(lw);
+
       const cR=document.createElement('div');cR.className='conn-right';
-      const btn=document.createElement('button');btn.className='dur-btn';
-      btn.innerHTML=`<span style="font-size:10px">▼</span><span>${e.dur!=null?e.dur:'?'}分</span>`;
-      btn.addEventListener('click',ev=>{ev.stopPropagation();openDurPicker(i,btn);});
-      cR.appendChild(btn);conn.appendChild(cL);conn.appendChild(cR);tl.appendChild(conn);
+      const jb=document.createElement('button');jb.className='journey-badge';
+      jb.innerHTML=`<span class="journey-icon">${mIcon}</span><span class="journey-dur">${durLabel}</span>`;
+      jb.addEventListener('click',ev=>{ev.stopPropagation();openDurPicker(i,jb);});
+      cR.appendChild(jb);
+      conn.appendChild(cL);conn.appendChild(cR);
+      tl.appendChild(conn);
     }
   });
 
@@ -541,7 +597,8 @@ function renderTimeline(){
   setupDragDrop();
 }
 
-// 初回
 renderHeader();
 renderTimeline();
 </script>
+</body>
+</html>
