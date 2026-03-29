@@ -463,8 +463,6 @@ if (!tripId) {
   location.hash = tripId;
 }
 
-let isSyncing = false; // リモート更新中はsaveしない
-
 const STEP=5,MAX_DUR=300;
 let nextId=100;
 let days=[];
@@ -474,177 +472,112 @@ let durPickerIdx=null,timePopupIdx=null,tpFixed=false,durLocked=false;
 
 function mkEvent(name,fixedTime,dur){return{id:nextId++,name,fixedTime,dur,durLocked:false,checks:[],open:false};}
 
-// ── 同期ロジック ──────────────────────────────────────────
-// 設計方針:
-//   - clientId で「自分の保存」と「他人の保存」を確実に区別する
-//   - 自分の保存エコー（ローカル + サーバー確認）は完全に無視
-//   - 他人の更新は編集中のみキューに溜め、編集終了後に適用
-
-const clientId = crypto.randomUUID(); // このタブ固有のID
+// ══════════════════════════════════════════════════════════
+//  保存・同期ロジック（信頼性重視版）
+//
+//  設計方針：
+//  1. 自分の入力は即座にローカルのdaysに書き込む
+//  2. saveToFirestore()は常に現在のdaysを丸ごとアップロードする
+//  3. onSnapshotが届いたら「自分が今フォーカス中のフィールド」以外をマージする
+//  4. 「自分の書き込みエコー」はhasPendingWritesで弾く（clientId不要）
+// ══════════════════════════════════════════════════════════
 
 let saveTimer = null;
-let pendingSnap = null;    // 編集中に届いた他人のスナップショット
-let lastSavedDays = null;  // 最後にFirestoreへの保存が確定した状態（マージの基準点）
 
-function isEditingNow() {
-  const el = document.activeElement;
-  return !!(el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA'));
+// 現在フォーカス中の入力情報を追跡
+let focusedField = null; // {dayIdx, evId, field} or null
+document.addEventListener('focusin', e => {
+  const inp = e.target;
+  if(inp.tagName !== 'INPUT' && inp.tagName !== 'TEXTAREA'){ focusedField=null; return; }
+  const evIdx = inp.dataset.evIdx;
+  const role  = inp.dataset.role;
+  const dayIdx= inp.dataset.dayIdx;
+  if(evIdx != null && role && dayIdx != null){
+    const ev = days[dayIdx]?.events[evIdx];
+    focusedField = ev ? {dayIdx:+dayIdx, evId:ev.id, field:role} : null;
+  } else {
+    focusedField = null;
+  }
+}, true);
+document.addEventListener('focusout', () => { focusedField=null; }, true);
+
+function saveToFirestore(){
+  clearTimeout(saveTimer);
+  const snapshot = {
+    days: JSON.parse(JSON.stringify(days)),
+    tripName: document.getElementById('tripName').value,
+    ts: Date.now()
+  };
+  saveTimer = setTimeout(async () => {
+    try{
+      await setDoc(doc(db,'trips',tripId), snapshot);
+    } catch(err){
+      console.error('save failed', err);
+      showToast('⚠️ 保存失敗。ネット接続を確認してください。');
+    }
+    saveTimer = null;
+  }, 400);
 }
 
-// ── 3ウェイマージ ─────────────────────────────────────────
-// remote  : 相手から届いたデータ
-// local   : 自分のメモリ上の最新状態（未保存の変更を含む）
-// base    : 最後に確定保存した状態（両者の「出発点」）
-//
-// 各フィールドについて：
-//   ・自分が base から変えた → 自分の値を優先
-//   ・自分は変えていないが相手が変えた → 相手の値を使う
-//   ・両方が変えた（衝突） → 自分の値を優先
-function threeWayMerge(remote, local, base) {
-  if (!base) return remote; // 初回ロード時はそのまま
+function showToast(msg){
+  const t=document.createElement('div');
+  t.textContent=msg;
+  t.style.cssText='position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:#c0392b;color:#fff;padding:8px 16px;border-radius:12px;font-size:12px;z-index:9999;font-family:"M PLUS Rounded 1c",sans-serif;white-space:nowrap';
+  document.body.appendChild(t);
+  setTimeout(()=>t.remove(),4000);
+}
 
-  const EV_FIELDS = ['name', 'fixedTime', 'dur', 'checks', 'open'];
+// フィールドレベルマージ：リモートのdaysを受け取り、
+// 自分がフォーカス中のフィールドだけ上書きしないでローカル値を守る
+function mergeRemoteDays(remoteDays){
+  // 日程数が違う場合はリモートを優先しつつローカルの新規日程を末尾に追加
+  const result = JSON.parse(JSON.stringify(remoteDays));
 
-  // ★ remote.map() ではなく、local と remote の長い方に合わせてループする。
-  // remote.map() だとローカルで追加した日程がスナップ到着時に消えてしまう。
-  const maxLen = Math.max(remote.length, local.length);
-  const result = [];
-
-  for (let di = 0; di < maxLen; di++) {
-    const remDay  = remote[di];
-    const locDay  = local[di];
-    const baseDay = base[di];
-
-    // ローカルにのみ存在 → ローカルで新規追加した日程。そのまま保持する
-    if (!remDay) {
-      result.push(JSON.parse(JSON.stringify(locDay)));
-      continue;
-    }
-    // ローカルまたは基準点がない → リモートをそのまま使う
-    if (!locDay || !baseDay) {
-      result.push(remDay);
-      continue;
-    }
-
-    // 両方に存在 → イベントレベルでマージ
-    // ① リモートにあるイベントはフィールドを3ウェイマージ
-    const mergedEvents = remDay.events.map(remEv => {
-      const locEv  = locDay.events.find(e => e.id === remEv.id);
-      const baseEv = baseDay.events.find(e => e.id === remEv.id);
-      if (!locEv || !baseEv) return remEv;
-
-      const merged = { ...remEv };
-      EV_FIELDS.forEach(key => {
-        const locVal  = JSON.stringify(locEv[key]);
-        const baseVal = JSON.stringify(baseEv[key]);
-        if (locVal !== baseVal) merged[key] = locEv[key];
-      });
-      return merged;
-    });
-
-    // ② ローカルで新規追加したイベント（base にも remote にもない）を末尾に追加
-    const remIds  = new Set(remDay.events.map(e => e.id));
-    const baseIds = new Set(baseDay.events.map(e => e.id));
-    const localOnlyEvents = locDay.events.filter(e => !remIds.has(e.id) && !baseIds.has(e.id));
-
-    result.push({ ...remDay, events: [...mergedEvents, ...localOnlyEvents] });
+  // ローカルにしかない日程（新規追加）を追加
+  for(let di=remoteDays.length; di<days.length; di++){
+    result.push(JSON.parse(JSON.stringify(days[di])));
   }
+
+  // 既存日程内のイベントをフィールドレベルでマージ
+  result.forEach((remDay, di) => {
+    if(!days[di]) return; // ローカルにない日程はリモートをそのまま使う
+    remDay.events.forEach(remEv => {
+      const locEv = days[di].events.find(e => e.id === remEv.id);
+      if(!locEv) return; // ローカルにないイベントはリモートをそのまま
+      // フォーカス中のフィールドはローカル値を守る
+      const EV_FIELDS = ['name','fixedTime','dur','durLocked','checks','open'];
+      EV_FIELDS.forEach(f => {
+        const isFocused = focusedField &&
+          focusedField.dayIdx===di &&
+          focusedField.evId===remEv.id &&
+          focusedField.field===f;
+        if(isFocused){
+          remEv[f] = locEv[f]; // 自分が編集中 → ローカル値を守る
+        }
+      });
+    });
+    // ローカルで追加したイベント（リモートにない）を追加
+    const remIds = new Set(remDay.events.map(e=>e.id));
+    days[di].events.forEach(locEv => {
+      if(!remIds.has(locEv.id)){
+        remDay.events.push(JSON.parse(JSON.stringify(locEv)));
+      }
+    });
+  });
 
   return result;
 }
 
-function applySnap(snap) {
-  if (!snap.exists()) return;
-  isSyncing = true;
-  const data = snap.data();
-  const incoming = data.days || [];
-
-  // リモートデータにローカルの未保存変更をマージする
-  const merged = threeWayMerge(incoming, days, lastSavedDays);
-
-  // 初回ロード時は受信データを基準点として記録する
-  if (!lastSavedDays) lastSavedDays = JSON.parse(JSON.stringify(incoming));
-
-  days = merged;
-  document.getElementById('tripName').value = data.tripName || '';
-  days.forEach(d => d.events.forEach(e => { if (e.id >= nextId) nextId = e.id + 1; }));
-  curDay = Math.min(curDay, Math.max(0, days.length - 1));
-
-  // Bug Fix 3b: フォーカス復元 — IDなし要素（ev-name等）も data-idx で追跡する
-  const focused = document.activeElement;
-  const focusedId = focused?.id || null;
-  const focusedEvIdx = focused?.dataset?.evIdx ?? null;
-  const focusedRole  = focused?.dataset?.role  ?? null;
-  const focusedValue = focused?.value ?? null;
-
-  renderHeader();
-  renderTimeline();
-  isSyncing = false;
-  pendingSnap = null;
-
-  // 再描画後にフォーカスを復元
-  if (focusedId) {
-    const el = document.getElementById(focusedId);
-    if (el && focusedValue !== null) { el.value = focusedValue; el.focus(); }
-  } else if (focusedEvIdx !== null && focusedRole) {
-    const sel = `[data-ev-idx="${focusedEvIdx}"][data-role="${focusedRole}"]`;
-    const el = document.querySelector(sel);
-    if (el && focusedValue !== null) { el.value = focusedValue; el.focus(); }
-  }
-
-  // ★ 本修正の核心：
-  // 保存予約（saveTimer）が残っている場合、その daysToSave はマージ前の古いデータ。
-  // そのまま発火すると相手の変更を上書きしてしまうので、
-  // 予約をキャンセルしてマージ済みの days で撮り直す。
-  if (saveTimer !== null) {
-    clearTimeout(saveTimer);
-    saveTimer = null;
-    saveToFirestore();
-  }
-}
-
-function saveToFirestore() {
-  if (isSyncing) return;
-  clearTimeout(saveTimer);
-  // Bug Fix 2: days と tripName をここで確定コピーする。
-  // setTimeout内でアクセスすると applySnap による days の再代入後に
-  // 別ユーザーのデータを誤って保存してしまう。
-  const daysToSave = JSON.parse(JSON.stringify(days));
-  const nameToSave = document.getElementById('tripName').value;
-  saveTimer = setTimeout(async () => {
-    try {
-      await setDoc(doc(db, "trips", tripId), {
-        days: daysToSave,
-        tripName: nameToSave,
-        _lastEditor: clientId
-      });
-      // 保存が確定したので基準点を更新する
-      // applySnap の 3ウェイマージはこの値を使って「自分が変えた箇所」を判定する
-      lastSavedDays = daysToSave;
-      saveTimer = null;
-      // 保存完了後、溜まっていた他ユーザーのスナップを適用する
-      // このタイミングで適用することで「入力中に届いた変更」も確実に反映される
-      if (pendingSnap && !isEditingNow()) applySnap(pendingSnap);
-    } catch(e) {
-      console.error('save error', e);
-      // 保存失敗を画面に表示
-      const hint = document.createElement('div');
-      hint.textContent = '⚠️ 保存に失敗しました（権限かネット接続を確認）';
-      hint.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:#c0392b;color:#fff;padding:8px 16px;border-radius:12px;font-size:12px;z-index:9999;font-family:"M PLUS Rounded 1c",sans-serif';
-      document.body.appendChild(hint);
-      setTimeout(()=>hint.remove(), 4000);
-    }
-    if (saveTimer !== null) saveTimer = null;
-  }, 200);
-}
-
 // Firestoreからリアルタイム受信
-onSnapshot(doc(db, "trips", tripId), (snap) => {
-  // ① ローカル書き込みエコー（サーバー確認前）は無視
-  if (snap.metadata.hasPendingWrites) return;
+let initialLoadDone = false;
+onSnapshot(doc(db,'trips',tripId), snap => {
+  // 自分の書き込みがサーバー未確認の間のエコーは無視
+  if(snap.metadata.hasPendingWrites) return;
 
-  if (!snap.exists()) {
-    // 初回：デフォルトデータを作成して保存
+  if(!snap.exists()){
+    // 初回：デフォルトデータ
+    if(initialLoadDone) return;
+    initialLoadDone = true;
     days=[{
       date:'10/10',
       events:[
@@ -658,33 +591,58 @@ onSnapshot(doc(db, "trips", tripId), (snap) => {
         mkEvent('ホテル着',null,null),
       ]
     }];
-    // Bug Fix 1: 初回作成時も必ず画面を描画する。
-    // saveToFirestore後のスナップショットは _lastEditor===clientId で
-    // スキップされるため、ここで描画しないと永遠に空白のままになる。
-    renderHeader();
-    renderTimeline();
+    renderHeader();renderTimeline();
     saveToFirestore();
     return;
   }
 
-  // ② サーバー確認済みでも自分の保存なら無視（自分のデータはメモリが正）
-  if (snap.data()._lastEditor === clientId) return;
+  const data = snap.data();
+  const remoteDays = data.days || [];
 
-  // ③ 他人の更新：編集中はキュー、そうでなければ即適用
-  if (isEditingNow()) {
-    pendingSnap = snap;
+  if(!initialLoadDone){
+    // 初回ロード：リモートをそのまま使う
+    initialLoadDone = true;
+    days = remoteDays;
+    document.getElementById('tripName').value = data.tripName || '';
+    days.forEach(d=>d.events.forEach(e=>{if(e.id>=nextId)nextId=e.id+1;}));
+    curDay = Math.min(curDay, Math.max(0, days.length-1));
+    renderHeader();renderTimeline();
     return;
   }
-  applySnap(snap);
-});
 
-// 入力終了時（blur）にキューの他人スナップを適用
-document.addEventListener('blur', (e) => {
-  if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA') return;
-  setTimeout(() => {
-    if (!isEditingNow() && pendingSnap) applySnap(pendingSnap);
-  }, 200);
-}, true);
+  // 以降：他の人の更新をマージ
+  // 自分が書き込み中（saveTimer残っている）の場合は、
+  // マージ後に再保存して自分の変更を確実に上書き
+  const merged = mergeRemoteDays(remoteDays);
+  if(data.tripName) document.getElementById('tripName').value = data.tripName;
+  merged.forEach(d=>d.events.forEach(e=>{if(e.id>=nextId)nextId=e.id+1;}));
+  days = merged;
+  curDay = Math.min(curDay, Math.max(0, days.length-1));
+
+  // フォーカス中の入力欄の値をDOMに反映（再描画で上書きされないように）
+  const activeEl = document.activeElement;
+  const activeVal = activeEl?.value;
+  const activeRole = activeEl?.dataset?.role;
+  const activeEvIdx = activeEl?.dataset?.evIdx;
+  const activeDayIdx = activeEl?.dataset?.dayIdx;
+
+  renderHeader();renderTimeline();
+
+  // フォーカスと入力値を復元
+  if(activeEl && activeVal != null){
+    const restored = document.querySelector(
+      `[data-role="${activeRole}"][data-ev-idx="${activeEvIdx}"][data-day-idx="${activeDayIdx}"]`
+    );
+    if(restored){ restored.value=activeVal; restored.focus(); }
+  }
+
+  // 自分の変更が残っている場合は再保存（マージ結果で確定させる）
+  if(saveTimer !== null){
+    clearTimeout(saveTimer);
+    saveTimer = null;
+    saveToFirestore();
+  }
+});
 
 function getEvents(){return days[curDay]?days[curDay].events:[];}
 function parseT(s){if(!s||!s.includes(':'))return null;const[h,m]=s.split(':').map(Number);return isNaN(h)||isNaN(m)?null:h*60+m}
@@ -1425,7 +1383,7 @@ function renderTimelineInto(tl, evs, dayIdx){
     const handle=document.createElement('div');handle.className='drag-handle';handle.textContent='⠿';
 
     const nameIn=document.createElement('input');nameIn.className='ev-name';nameIn.placeholder='イベント名';nameIn.value=e.name;
-    nameIn.dataset.evIdx=i; nameIn.dataset.role='ev-name';
+    nameIn.dataset.evIdx=i; nameIn.dataset.role='name'; nameIn.dataset.dayIdx=dayIdx;
     nameIn.addEventListener('input',function(){evs[i].name=this.value;saveToFirestore();});
     nameIn.addEventListener('mousedown',ev=>ev.stopPropagation());
     nameIn.addEventListener('touchstart',ev=>ev.stopPropagation(),{passive:true});
