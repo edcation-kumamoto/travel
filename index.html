@@ -156,9 +156,9 @@ body::before{
 .ev-wrap{position:relative}
 .ev-wrap.dragging{opacity:.32}
 .ev-row{display:flex;align-items:flex-start}
-.ev-left{width:58px;flex-shrink:0;display:flex;flex-direction:column;align-items:flex-end;padding-right:8px;padding-top:10px}
+.ev-left{width:68px;flex-shrink:0;display:flex;flex-direction:column;align-items:flex-end;padding-right:8px;padding-top:8px}
 .ev-time{
-  font-size:12px;font-weight:700;
+  font-size:15px;font-weight:700;
   color:#1a5c58;
   cursor:pointer;
   padding:3px 5px;border-radius:6px;
@@ -176,8 +176,8 @@ body::before{
   background:#fff;
   /* Base cloud shape */
   border-radius:26px 30px 24px 28px / 28px 26px 30px 24px;
-  padding:10px 10px 10px 8px;
-  display:flex;align-items:center;gap:6px;min-height:44px;
+  padding:6px 8px 6px 6px;
+  display:flex;align-items:center;gap:6px;min-height:38px;
   box-shadow:
     0 3px 10px rgba(0,0,0,.09),
     0 1px 3px rgba(0,0,0,.05),
@@ -253,6 +253,8 @@ body::before{
   touch-action:manipulation;
 }
 .dur-btn:active{background:rgba(46,125,120,.22)}
+.dur-btn.warn{background:rgba(220,53,34,.1);border-color:rgba(220,53,34,.4);color:#dc3522;}
+.dur-btn.warn:active{background:rgba(220,53,34,.2)}
 
 /* ── ピッカー ── */
 .dur-picker{position:fixed;z-index:900;background:#fff;border-top:.5px solid #e0e0e0;border-radius:20px 20px 0 0;box-shadow:0 -4px 24px rgba(0,0,0,.18);width:100%;left:0;right:0;bottom:0;overflow:hidden;display:none}
@@ -264,7 +266,7 @@ body::before{
 
 /* ── 時刻ポップアップ ── */
 .time-popup{position:fixed;z-index:950;background:#fff;border:.5px solid #e0e0e0;border-radius:20px 20px 0 0;box-shadow:0 -4px 24px rgba(0,0,0,.18);padding:20px 20px 36px;width:100%;display:none}
-.tp-drum{overflow-y:scroll;height:160px;scroll-snap-type:y mandatory;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.tp-drum{overflow-y:scroll;height:160px;scroll-snap-type:y mandatory;scrollbar-width:none;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;touch-action:pan-y}
 .tp-drum::-webkit-scrollbar{display:none}
 .tp-drum-item{height:40px;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:500;scroll-snap-align:center;cursor:pointer;color:#1a1a1a;font-family:'M PLUS Rounded 1c',sans-serif;user-select:none}
 .tp-drum-item.sel{color:#2E7D78;font-weight:700}
@@ -379,15 +381,19 @@ function saveToFirestore() {
 // Firestoreからリアルタイム受信
 onSnapshot(doc(db, "trips", tripId), (snap) => {
   if (snap.exists()) {
+    // 入力中（フォーカスがinputにある）はUIを再描画しない
+    const focused = document.activeElement;
+    const isEditing = focused && (focused.tagName==='INPUT'||focused.tagName==='TEXTAREA');
     isSyncing = true;
     const data = snap.data();
     days = data.days || [];
-    if (data.tripName) document.getElementById('tripName').value = data.tripName;
-    // nextIdの衝突を防ぐ
+    if (data.tripName && !isEditing) document.getElementById('tripName').value = data.tripName;
     days.forEach(d => d.events.forEach(e => { if (e.id >= nextId) nextId = e.id + 1; }));
     curDay = Math.min(curDay, Math.max(0, days.length - 1));
-    renderHeader();
-    renderTimeline();
+    if (!isEditing) {
+      renderHeader();
+      renderTimeline();
+    }
     isSyncing = false;
   } else {
     // 初回：デフォルトデータを作成して保存
@@ -416,19 +422,40 @@ function computeTimes(evs){
   const n=evs.length,times=new Array(n).fill(null);
   // まず固定時刻を埋める
   for(let i=0;i<n;i++)if(evs[i].fixedTime)times[i]=parseT(evs[i].fixedTime);
+
+  // 2つの固定時刻の間の所要時間を自動按分
+  for(let i=0;i<n-1;i++){
+    if(times[i]==null) continue;
+    // 次の固定時刻を探す
+    for(let j=i+1;j<n;j++){
+      if(times[j]!=null){
+        const span=times[j]-times[i]; // 区間の総時間
+        const between=j-i; // 区間内のイベント数
+        if(span>=0&&between>0){
+          // 区間内に所要時間未設定のものがあれば均等分割
+          const hasUnset=evs.slice(i,j).some(e=>e.dur==null||isNaN(e.dur));
+          if(hasUnset){
+            const each=Math.floor(span/between/STEP)*STEP;
+            for(let k=i;k<j;k++) evs[k].dur=each;
+          }
+        }
+        break;
+      }
+    }
+  }
+
   // 前→後ろ方向に順算
   let cur=null;
   for(let i=0;i<n;i++){
     if(evs[i].fixedTime){cur=parseT(evs[i].fixedTime);times[i]=cur;}
     else if(cur!==null&&i>0){const d=evs[i-1].dur;if(d!=null&&!isNaN(d)){cur=cur+d;times[i]=cur;}else cur=null;}
   }
-  // 後ろ→前方向に逆算（固定時刻より前のイベントを埋める）
+  // 後ろ→前方向に逆算
   for(let i=n-1;i>=0;i--){
     if(times[i]!=null){
-      // iより前でtimes[j]がnullのものを逆算
       let base=times[i];
       for(let j=i-1;j>=0;j--){
-        if(times[j]!=null) break; // すでに確定済みなら止まる
+        if(times[j]!=null) break;
         const dur=evs[j].dur;
         if(dur!=null&&!isNaN(dur)){base=base-dur;times[j]=base;}
         else break;
@@ -673,11 +700,12 @@ function openDurPicker(idx,el){
   const padB=document.createElement('div');padB.style.cssText='height:90px;flex-shrink:0';inner.appendChild(padB);
   const p=document.getElementById('durPicker');
   p.style.cssText='display:block;position:fixed;bottom:0;left:0;right:0;width:100%;border-radius:20px 20px 0 0;box-shadow:0 -4px 24px rgba(0,0,0,.18);z-index:900;background:#fff;border-top:.5px solid #e0e0e0;overflow:hidden;';
+  document.body.style.overflow='hidden';
   const si=opts.indexOf(cur);if(si>=0)inner.scrollTop=si*40;
   setTimeout(()=>document.addEventListener('click',durOut),10);
 }
 function durOut(e){if(!document.getElementById('durPicker').contains(e.target))closeDurPicker();}
-function closeDurPicker(){document.getElementById('durPicker').style.display='none';durPickerIdx=null;document.removeEventListener('click',durOut);}
+function closeDurPicker(){document.getElementById('durPicker').style.display='none';durPickerIdx=null;document.removeEventListener('click',durOut);document.body.style.overflow='';}
 
 function buildDrum(drumEl, items, selectedVal) {
   drumEl.innerHTML = '';
@@ -715,6 +743,7 @@ function openTimePopup(idx,el){
   document.getElementById('tpFix').className='tp-fix'+(tpFixed?' on':'');
   const p=document.getElementById('timePopup');
   p.style.cssText='display:block;position:fixed;bottom:0;left:0;right:0;top:auto;width:100%;border-radius:20px 20px 0 0;box-shadow:0 -4px 24px rgba(0,0,0,.18);padding:20px 20px 36px;z-index:950;background:#fff;border:.5px solid #e0e0e0;';
+  document.body.style.overflow='hidden';
   setTimeout(()=>document.addEventListener('click',timeOut),10);
 }
 
@@ -735,7 +764,7 @@ function applyTime(){
 document.getElementById('tpFix').addEventListener('click',function(){tpFixed=!tpFixed;this.className='tp-fix'+(tpFixed?' on':'');});
 document.getElementById('tpOk').addEventListener('click',applyTime);
 function timeOut(e){if(!document.getElementById('timePopup').contains(e.target))closeTimePopup();}
-function closeTimePopup(){document.getElementById('timePopup').style.display='none';timePopupIdx=null;document.removeEventListener('click',timeOut);}
+function closeTimePopup(){document.getElementById('timePopup').style.display='none';timePopupIdx=null;document.removeEventListener('click',timeOut);document.body.style.overflow='';}
 
 function toggleList(evs,idx){
   evs[idx].open=!evs[idx].open;
@@ -827,12 +856,25 @@ function renderTimeline(){
       const conn=document.createElement('div');conn.className='connector';conn.style.minHeight=(barH+28)+'px';
       const cL=document.createElement('div');cL.className='conn-left';
       const bc=document.createElement('div');bc.className='conn-bar-col';bc.style.height='100%';
-      /* 線路：レールはCSS::before/::after、枕木はconn-bar */
       const bar=document.createElement('div');bar.className='conn-bar';
       bc.appendChild(bar);cL.appendChild(bc);
       const cR=document.createElement('div');cR.className='conn-right';
-      const btn=document.createElement('button');btn.className='dur-btn';
-      btn.innerHTML=`<span style="font-size:10px;opacity:.7">▼</span><span>${e.dur!=null?e.dur:'?'}分</span>`;
+      const btn=document.createElement('button');
+      // 警告判定：次の固定時刻との間で所要時間がオーバーしているか
+      let isWarn=false;
+      if(times[i]!=null&&evs[i+1]&&evs[i+1].fixedTime){
+        const nextFixed=parseT(evs[i+1].fixedTime);
+        if(nextFixed!=null&&times[i]+dur>nextFixed) isWarn=true;
+      } else if(times[i]!=null&&times[i+1]!=null&&evs[i+1].fixedTime){
+        if(times[i]+dur>times[i+1]) isWarn=true;
+      }
+      // 固定時刻間で按分計算と実際の所要時間がずれている場合も警告
+      if(!isWarn&&times[i]!=null&&times[i+1]!=null){
+        const expected=times[i+1]-times[i];
+        if(dur>expected+1) isWarn=true;
+      }
+      btn.className='dur-btn'+(isWarn?' warn':'');
+      btn.innerHTML=`<span style="font-size:10px;opacity:.7">▼</span><span>${e.dur!=null?e.dur:'?'}分</span>${isWarn?'<span style="font-size:10px;margin-left:2px">⚠️</span>':''}`;
       btn.addEventListener('click',ev=>{ev.stopPropagation();openDurPicker(i,btn);});
       cR.appendChild(btn);conn.appendChild(cL);conn.appendChild(cR);tl.appendChild(conn);
     }
@@ -840,7 +882,6 @@ function renderTimeline(){
 
   tl.appendChild(makeDZ(evs.length));
   setupDragDrop();
-  saveToFirestore();
 }
 
 document.getElementById('tripName').addEventListener('input', saveToFirestore);
