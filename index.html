@@ -275,6 +275,8 @@ body::before{
 .tp-fix{padding:8px 14px;border-radius:10px;border:.5px solid #e0e0e0;background:transparent;font-size:12px;font-family:'M PLUS Rounded 1c',sans-serif;cursor:pointer;color:#1a1a1a}
 .tp-fix.on{background:rgba(192,57,43,.1);border-color:rgba(192,57,43,.4);color:#c0392b;font-weight:700}
 .tp-ok{padding:8px 20px;border-radius:10px;border:none;background:#2E7D78;color:#fff;font-size:12px;font-family:'M PLUS Rounded 1c',sans-serif;cursor:pointer;font-weight:700}
+.dur-lock{padding:5px 12px;border-radius:10px;border:.5px solid #e0e0e0;background:transparent;font-size:12px;font-family:'M PLUS Rounded 1c',sans-serif;cursor:pointer;color:#888;touch-action:manipulation}
+.dur-lock.on{background:rgba(46,125,120,.1);border-color:rgba(46,125,120,.45);color:#2E7D78;font-weight:700}
 </style>
 </head>
 <body>
@@ -306,8 +308,9 @@ body::before{
 
 <div class="dur-picker" id="durPicker">
   <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px 8px;border-bottom:.5px solid #f0f0f0">
+    <button id="durLock" class="dur-lock">🔓 固定</button>
     <span style="font-size:13px;font-weight:700;color:#888;font-family:'M PLUS Rounded 1c',sans-serif">所要時間</span>
-    <button onclick="document.getElementById('durPicker').style.display='none'" style="border:none;background:rgba(0,0,0,.06);border-radius:50%;width:26px;height:26px;font-size:14px;cursor:pointer;color:#666">×</button>
+    <button id="durClose" style="border:none;background:rgba(0,0,0,.06);border-radius:50%;width:26px;height:26px;font-size:14px;cursor:pointer;color:#666">×</button>
   </div>
   <div style="position:relative">
     <div class="dur-inner" id="durInner"></div>
@@ -362,9 +365,9 @@ let nextId=100;
 let days=[];
 let curDay=0;
 let dragSrc=null;
-let durPickerIdx=null,timePopupIdx=null,tpFixed=false;
+let durPickerIdx=null,timePopupIdx=null,tpFixed=false,durLocked=false;
 
-function mkEvent(name,fixedTime,dur){return{id:nextId++,name,fixedTime,dur,checks:[],open:false};}
+function mkEvent(name,fixedTime,dur){return{id:nextId++,name,fixedTime,dur,durLocked:false,checks:[],open:false};}
 
 // ── 同期ロジック ──────────────────────────────────────────
 // 設計方針:
@@ -597,10 +600,14 @@ function computeTimes(evs){
         const between=j-i; // 区間内のイベント数
         if(span>=0&&between>0){
           // 区間内に所要時間未設定のものがあれば均等分割
-          const hasUnset=evs.slice(i,j).some(e=>e.dur==null||isNaN(e.dur));
+          const hasUnset=evs.slice(i,j).some(e=>!e.durLocked&&(e.dur==null||isNaN(e.dur)));
           if(hasUnset){
-            const each=Math.floor(span/between/STEP)*STEP;
-            for(let k=i;k<j;k++) evs[k].dur=each;
+            const lockedDur=evs.slice(i,j).reduce((s,e)=>s+(e.durLocked?(e.dur||0):0),0);
+            const unlockedCount=evs.slice(i,j).filter(e=>!e.durLocked).length;
+            if(unlockedCount>0){
+              const each=Math.floor((span-lockedDur)/unlockedCount/STEP)*STEP;
+              for(let k=i;k<j;k++) if(!evs[k].durLocked) evs[k].dur=Math.max(0,each);
+            }
           }
         }
         break;
@@ -852,13 +859,16 @@ function openDurPicker(idx,el){
   closeTimePopup();durPickerIdx=idx;
   const evs=getEvents(),times=computeTimes(evs);
   const maxD=maxDurFor(idx,times,evs),cur=evs[idx].dur??0;
+  durLocked=!!evs[idx].durLocked;
+  document.getElementById('durLock').className='dur-lock'+(durLocked?' on':'');
+  document.getElementById('durLock').textContent=durLocked?'🔒 固定':'🔓 固定';
   const inner=document.getElementById('durInner');inner.innerHTML='';
   const opts=[];for(let v=0;v<=Math.min(maxD,MAX_DUR);v+=STEP)opts.push(v);
   // 上下パッド（0分・最大分を中央に選択できるように）
   const padT=document.createElement('div');padT.style.cssText='height:90px;flex-shrink:0';inner.appendChild(padT);
   opts.forEach(v=>{
     const d=document.createElement('div');d.className='dur-item'+(v===cur?' sel':'');d.textContent=v+'分';
-    d.addEventListener('click',()=>{evs[idx].dur=v;closeDurPicker();renderTimeline();saveToFirestore();});
+    d.addEventListener('click',()=>{evs[idx].dur=v;evs[idx].durLocked=durLocked;closeDurPicker();renderTimeline();saveToFirestore();});
     inner.appendChild(d);
   });
   const padB=document.createElement('div');padB.style.cssText='height:90px;flex-shrink:0';inner.appendChild(padB);
@@ -870,6 +880,14 @@ function openDurPicker(idx,el){
 }
 function durOut(e){if(!document.getElementById('durPicker').contains(e.target))closeDurPicker();}
 function closeDurPicker(){document.getElementById('durPicker').style.display='none';durPickerIdx=null;document.removeEventListener('click',durOut);document.body.style.overflow='';}
+
+document.getElementById('durClose').addEventListener('click',closeDurPicker);
+document.getElementById('durLock').addEventListener('click',function(e){
+  e.stopPropagation();
+  durLocked=!durLocked;
+  this.className='dur-lock'+(durLocked?' on':'');
+  this.textContent=durLocked?'🔒 固定':'🔓 固定';
+});
 
 function buildDrum(drumEl, items, selectedVal) {
   drumEl.innerHTML = '';
@@ -899,7 +917,7 @@ function openTimePopup(idx,el){
   closeDurPicker();timePopupIdx=idx;
   const evs=getEvents(),times=computeTimes(evs);
   const t=times[idx]??540; // デフォルト9:00
-  tpFixed=!!evs[idx].fixedTime;
+  tpFixed=idx===0?true:!!evs[idx].fixedTime;
   const h=Math.floor(t/60)%24;
   const m=Math.round((t%60)/5)*5%60;
   buildDrum(document.getElementById('tpHourDrum'), HOURS, h);
@@ -921,7 +939,14 @@ function applyTime(){
   else{
     evs[timePopupIdx].fixedTime=null;
     const times=computeTimes(evs);
-    if(timePopupIdx>0&&times[timePopupIdx-1]!=null){const nd=parsed-times[timePopupIdx-1];if(nd>=0)evs[timePopupIdx-1].dur=nd;}
+    if(timePopupIdx>0&&times[timePopupIdx-1]!=null){
+      const nd=parsed-times[timePopupIdx-1];
+      if(nd>=0) evs[timePopupIdx-1].dur=nd;
+      else evs[timePopupIdx].fixedTime=fmtT(parsed); // 差がマイナス → 固定時刻で保存
+    }else{
+      // 最初のイベント or 前の時刻が不明 → 固定時刻として保存
+      evs[timePopupIdx].fixedTime=fmtT(parsed);
+    }
   }
   closeTimePopup();renderTimeline();saveToFirestore();
 }
@@ -1052,7 +1077,7 @@ function renderTimeline(){
         if(dur>expected+1) isWarn=true;
       }
       btn.className='dur-btn'+(isWarn?' warn':'');
-      btn.innerHTML=`<span style="font-size:10px;opacity:.7">▼</span><span>${e.dur!=null?e.dur:'?'}分</span>${isWarn?'<span style="font-size:10px;margin-left:2px">⚠️</span>':''}`;
+      btn.innerHTML=`<span style="font-size:10px;opacity:.7">▼</span>${e.durLocked?'<span style="font-size:10px;margin-right:1px">🔒</span>':''}<span>${e.dur!=null?e.dur:'?'}分</span>${isWarn?'<span style="font-size:10px;margin-left:2px">⚠️</span>':''}`;
       btn.addEventListener('click',ev=>{ev.stopPropagation();openDurPicker(i,btn);});
       cR.appendChild(btn);conn.appendChild(cL);conn.appendChild(cR);tl.appendChild(conn);
     }
