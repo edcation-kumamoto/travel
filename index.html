@@ -397,13 +397,31 @@ function threeWayMerge(remote, local, base) {
 
   const EV_FIELDS = ['name', 'fixedTime', 'dur', 'checks', 'open'];
 
-  return remote.map((remDay, di) => {
-    const locDay = local[di];
-    const baseDay = base[di];
-    if (!locDay || !baseDay) return remDay;
+  // ★ remote.map() ではなく、local と remote の長い方に合わせてループする。
+  // remote.map() だとローカルで追加した日程がスナップ到着時に消えてしまう。
+  const maxLen = Math.max(remote.length, local.length);
+  const result = [];
 
+  for (let di = 0; di < maxLen; di++) {
+    const remDay  = remote[di];
+    const locDay  = local[di];
+    const baseDay = base[di];
+
+    // ローカルにのみ存在 → ローカルで新規追加した日程。そのまま保持する
+    if (!remDay) {
+      result.push(JSON.parse(JSON.stringify(locDay)));
+      continue;
+    }
+    // ローカルまたは基準点がない → リモートをそのまま使う
+    if (!locDay || !baseDay) {
+      result.push(remDay);
+      continue;
+    }
+
+    // 両方に存在 → イベントレベルでマージ
+    // ① リモートにあるイベントはフィールドを3ウェイマージ
     const mergedEvents = remDay.events.map(remEv => {
-      const locEv = locDay.events.find(e => e.id === remEv.id);
+      const locEv  = locDay.events.find(e => e.id === remEv.id);
       const baseEv = baseDay.events.find(e => e.id === remEv.id);
       if (!locEv || !baseEv) return remEv;
 
@@ -411,14 +429,20 @@ function threeWayMerge(remote, local, base) {
       EV_FIELDS.forEach(key => {
         const locVal  = JSON.stringify(locEv[key]);
         const baseVal = JSON.stringify(baseEv[key]);
-        // ローカルが base から変わっていれば自分の変更を優先
         if (locVal !== baseVal) merged[key] = locEv[key];
       });
       return merged;
     });
 
-    return { ...remDay, events: mergedEvents };
-  });
+    // ② ローカルで新規追加したイベント（base にも remote にもない）を末尾に追加
+    const remIds  = new Set(remDay.events.map(e => e.id));
+    const baseIds = new Set(baseDay.events.map(e => e.id));
+    const localOnlyEvents = locDay.events.filter(e => !remIds.has(e.id) && !baseIds.has(e.id));
+
+    result.push({ ...remDay, events: [...mergedEvents, ...localOnlyEvents] });
+  }
+
+  return result;
 }
 
 function applySnap(snap) {
