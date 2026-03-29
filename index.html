@@ -98,18 +98,18 @@ body::before{
   60%{transform:rotate(-2deg)}
   80%{transform:rotate(2deg)}
 }
-.ev-wrap.jiggle .ev-card{animation:jiggle .38s ease-in-out infinite}
-.ev-delete-badge{
-  position:absolute;top:-8px;left:-8px;
-  width:22px;height:22px;border-radius:50%;
+.ev-wrap.jiggle .ev-card{animation:jiggle .38s ease-in-out infinite;background:#fff8f8}
+
+/* 削除ボタン：list-toggleと同位置、jiggle時に差し替え */
+.ev-del-btn{
+  width:26px;height:26px;border-radius:50%;border:none;
   background:#ff3b30;color:#fff;
-  font-size:14px;font-weight:900;line-height:22px;text-align:center;
-  z-index:10;cursor:pointer;
-  box-shadow:0 2px 6px rgba(0,0,0,.35);
-  display:none;touch-action:manipulation;
-  user-select:none;
+  font-size:15px;font-weight:900;line-height:1;
+  cursor:pointer;display:flex;align-items:center;justify-content:center;
+  flex-shrink:0;touch-action:manipulation;
+  box-shadow:0 2px 6px rgba(255,59,48,.45);
 }
-.ev-wrap.jiggle .ev-delete-badge{display:block}
+.ev-del-btn:active{background:#c0392b;transform:scale(.92)}
 
 /* コネクター長押しヒント */
 .connector.lp-hint .conn-right::after{
@@ -942,7 +942,10 @@ let touchDragData=null;
 let touchClone=null;
 
 function exitJiggle(){
-  document.querySelectorAll('.ev-wrap.jiggle').forEach(el=>el.classList.remove('jiggle'));
+  document.querySelectorAll('.ev-wrap.jiggle').forEach(el=>{
+    if(el._exitJiggle) el._exitJiggle();
+    else el.classList.remove('jiggle');
+  });
 }
 
 function setupDragDrop(){
@@ -951,7 +954,7 @@ function setupDragDrop(){
     // デスクトップ drag
     el.draggable=true;
     el.addEventListener('dragstart',e=>{
-      if(e.target.closest('.ev-name,.list-toggle,.check-box,.check-text,.add-check-input,.ev-time,.dur-btn,.ev-delete-badge'))return e.preventDefault();
+      if(e.target.closest('.ev-name,.list-toggle,.check-box,.check-text,.add-check-input,.ev-time,.dur-btn,.ev-del-btn'))return e.preventDefault();
       exitJiggle();
       dragSrc=i;e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('text/plain',String(i));
       setTimeout(()=>el.classList.add('dragging'),0);
@@ -1018,24 +1021,27 @@ function setupDragDrop(){
     conn.addEventListener('touchcancel',lpEnd);
   });
 
-  /* ev-card 2秒長押し → 削除バッジ表示 */
-  document.querySelectorAll('.ev-card').forEach((card,i)=>{
+  /* ev-name 2秒長押し → 削除モード */
+  document.querySelectorAll('.ev-name').forEach((nameIn,i)=>{
     let lpTimer=null;
     function lpStart(e){
-      if(e.target.closest('.drag-handle,.ev-name,.list-toggle,.check-box,.check-text,.add-check-input,.ev-time,.dur-btn,.ev-delete-badge'))return;
+      // 既にjiggleなら無視
+      if(nameIn.closest('.ev-wrap')?.classList.contains('jiggle')) return;
       lpTimer=setTimeout(()=>{
+        nameIn.blur();
+        const wrap=nameIn.closest('.ev-wrap');
         exitJiggle();
-        card.closest('.ev-wrap').classList.add('jiggle');
-        if(navigator.vibrate)navigator.vibrate([30,20,60]);
+        if(wrap?._enterJiggle) wrap._enterJiggle();
+        else wrap?.classList.add('jiggle');
       },2000);
     }
     function lpEnd(){clearTimeout(lpTimer);lpTimer=null;}
-    card.addEventListener('mousedown',lpStart);
-    card.addEventListener('mouseup',lpEnd);
-    card.addEventListener('mouseleave',lpEnd);
-    card.addEventListener('touchstart',lpStart,{passive:true});
-    card.addEventListener('touchend',lpEnd);
-    card.addEventListener('touchcancel',lpEnd);
+    nameIn.addEventListener('mousedown',lpStart);
+    nameIn.addEventListener('mouseup',lpEnd);
+    nameIn.addEventListener('touchstart',lpStart,{passive:true});
+    nameIn.addEventListener('touchend',lpEnd);
+    nameIn.addEventListener('touchcancel',lpEnd);
+    nameIn.addEventListener('touchmove',lpEnd,{passive:true});
   });
 }
 
@@ -1104,9 +1110,10 @@ function cleanDZ(){
   document.querySelectorAll('.drop-zone').forEach(z=>z.classList.remove('over'));
 }
 
-// 画面どこかタップでjiggle解除
+// 画面どこかタップでjiggle解除（ev-del-btn以外）
 document.addEventListener('click',e=>{
-  if(!e.target.closest('.ev-wrap.jiggle'))exitJiggle();
+  if(e.target.closest('.ev-del-btn')) return;
+  if(!e.target.closest('.ev-wrap.jiggle')) exitJiggle();
 },{capture:true});
 
 function openDurPicker(idx,el){
@@ -1308,16 +1315,6 @@ function renderTimelineInto(tl, evs, dayIdx){
     tl.appendChild(makeDZ(i));
 
     const wrap=document.createElement('div');wrap.className='ev-wrap';wrap.style.position='relative';
-    // 削除バッジ（長押し後表示）
-    const badge=document.createElement('div');badge.className='ev-delete-badge';badge.textContent='✕';
-    badge.addEventListener('pointerdown',ev=>{ev.stopPropagation();});
-    badge.addEventListener('click',ev=>{
-      ev.stopPropagation();
-      exitJiggle();
-      getEvents().splice(i,1);
-      renderTimeline();saveToFirestore();
-    });
-    wrap.appendChild(badge);
     const row=document.createElement('div');row.className='ev-row';
 
     const left=document.createElement('div');left.className='ev-left';
@@ -1329,16 +1326,46 @@ function renderTimelineInto(tl, evs, dayIdx){
     const right=document.createElement('div');right.className='ev-right';
     const card=document.createElement('div');card.className='ev-card';
     const handle=document.createElement('div');handle.className='drag-handle';handle.textContent='⠿';
+
     const nameIn=document.createElement('input');nameIn.className='ev-name';nameIn.placeholder='イベント名';nameIn.value=e.name;
     nameIn.dataset.evIdx=i; nameIn.dataset.role='ev-name';
     nameIn.addEventListener('input',function(){evs[i].name=this.value;saveToFirestore();});
     nameIn.addEventListener('mousedown',ev=>ev.stopPropagation());
+    nameIn.addEventListener('touchstart',ev=>ev.stopPropagation(),{passive:true});
+
+    // listBtn と delBtn を状態で切り替え
     const listBtn=document.createElement('button');listBtn.id='lt-'+i;
     listBtn.className='list-toggle'+(e.open?' open':'');listBtn.textContent=e.open?'−':'≡';
     listBtn.addEventListener('mousedown',ev=>ev.stopPropagation());
-    listBtn.addEventListener('click',ev=>{ev.stopPropagation();toggleList(evs,i);});
-    card.appendChild(handle);card.appendChild(nameIn);card.appendChild(listBtn);
+    listBtn.addEventListener('touchstart',ev=>ev.stopPropagation(),{passive:true});
+    listBtn.addEventListener('click',ev=>{ev.stopPropagation();if(!wrap.classList.contains('jiggle'))toggleList(evs,i);});
+
+    const delBtn=document.createElement('button');delBtn.className='ev-del-btn';delBtn.textContent='✕';
+    delBtn.style.display='none';
+    delBtn.addEventListener('mousedown',ev=>ev.stopPropagation());
+    delBtn.addEventListener('touchstart',ev=>ev.stopPropagation(),{passive:true});
+    delBtn.addEventListener('click',ev=>{
+      ev.stopPropagation();
+      exitJiggle();
+      days[curDay].events.splice(i,1);
+      renderTimeline();saveToFirestore();
+    });
+
+    card.appendChild(handle);card.appendChild(nameIn);card.appendChild(listBtn);card.appendChild(delBtn);
     right.appendChild(card);
+
+    // jiggle状態の切り替え関数
+    wrap._enterJiggle=()=>{
+      wrap.classList.add('jiggle');
+      listBtn.style.display='none';
+      delBtn.style.display='flex';
+      if(navigator.vibrate)navigator.vibrate([30,20,60]);
+    };
+    wrap._exitJiggle=()=>{
+      wrap.classList.remove('jiggle');
+      listBtn.style.display='flex';
+      delBtn.style.display='none';
+    };
 
     const cl=document.createElement('div');cl.id='cl-'+i;cl.className='checklist'+(e.open?' open':'');
     right.appendChild(cl);
