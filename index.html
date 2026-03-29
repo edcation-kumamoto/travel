@@ -256,7 +256,7 @@ body::before{
 
 /* ── ピッカー ── */
 .dur-picker{position:fixed;z-index:900;background:#fff;border-top:.5px solid #e0e0e0;border-radius:20px 20px 0 0;box-shadow:0 -4px 24px rgba(0,0,0,.18);width:100%;left:0;right:0;bottom:0;overflow:hidden;display:none}
-.dur-inner{height:220px;overflow-y:scroll;scroll-snap-type:y mandatory;scrollbar-width:none}
+.dur-inner{height:220px;overflow-y:scroll;scroll-snap-type:y mandatory;scrollbar-width:none;overscroll-behavior:contain;touch-action:pan-y}
 .dur-inner::-webkit-scrollbar{display:none}
 .dur-item{height:40px;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:500;scroll-snap-align:center;cursor:pointer;color:#1a1a1a;touch-action:manipulation;font-family:'M PLUS Rounded 1c',sans-serif}
 .dur-item.sel{color:#2E7D78}
@@ -663,14 +663,17 @@ function openDurPicker(idx,el){
   const maxD=maxDurFor(idx,times,evs),cur=evs[idx].dur??0;
   const inner=document.getElementById('durInner');inner.innerHTML='';
   const opts=[];for(let v=0;v<=Math.min(maxD,MAX_DUR);v+=STEP)opts.push(v);
+  // 上下パッド（0分・最大分を中央に選択できるように）
+  const padT=document.createElement('div');padT.style.cssText='height:90px;flex-shrink:0';inner.appendChild(padT);
   opts.forEach(v=>{
     const d=document.createElement('div');d.className='dur-item'+(v===cur?' sel':'');d.textContent=v+'分';
     d.addEventListener('click',()=>{evs[idx].dur=v;closeDurPicker();renderTimeline();});
     inner.appendChild(d);
   });
+  const padB=document.createElement('div');padB.style.cssText='height:90px;flex-shrink:0';inner.appendChild(padB);
   const p=document.getElementById('durPicker');
   p.style.cssText='display:block;position:fixed;bottom:0;left:0;right:0;width:100%;border-radius:20px 20px 0 0;box-shadow:0 -4px 24px rgba(0,0,0,.18);z-index:900;background:#fff;border-top:.5px solid #e0e0e0;overflow:hidden;';
-  const si=opts.indexOf(cur);if(si>=0)inner.scrollTop=si*40-90;
+  const si=opts.indexOf(cur);if(si>=0)inner.scrollTop=si*40;
   setTimeout(()=>document.addEventListener('click',durOut),10);
 }
 function durOut(e){if(!document.getElementById('durPicker').contains(e.target))closeDurPicker();}
