@@ -366,40 +366,58 @@ let durPickerIdx=null,timePopupIdx=null,tpFixed=false;
 
 function mkEvent(name,fixedTime,dur){return{id:nextId++,name,fixedTime,dur,checks:[],open:false};}
 
-// Firestoreへの保存（500ms debounce）
+// ── 同期ロジック ──────────────────────────────────────────
+// 設計方針:
+//   1. 自分の書き込みエコー（hasPendingWrites=true）は無視
+//   2. 入力中（isEditing）は他人の更新をキューに溜め、編集終了後に適用
+//   3. 保存中（hasPendingSave=true）はキューを適用しない（stale closure防止）
+
 let saveTimer = null;
-let pendingSave = false; // 未送信の変更があるか
+let hasPendingSave = false;
+let pendingSnap = null; // 編集中に届いた他人のスナップショット
+
+function isEditingNow() {
+  const el = document.activeElement;
+  return !!(el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA'));
+}
+
+function applySnap(snap) {
+  if (!snap.exists()) return;
+  isSyncing = true;
+  const data = snap.data();
+  days = data.days || [];
+  document.getElementById('tripName').value = data.tripName || '';
+  days.forEach(d => d.events.forEach(e => { if (e.id >= nextId) nextId = e.id + 1; }));
+  curDay = Math.min(curDay, Math.max(0, days.length - 1));
+  renderHeader();
+  renderTimeline();
+  isSyncing = false;
+  pendingSnap = null;
+}
+
 function saveToFirestore() {
   if (isSyncing) return;
-  pendingSave = true;
+  hasPendingSave = true;
   clearTimeout(saveTimer);
   saveTimer = setTimeout(async () => {
     try {
       await setDoc(doc(db, "trips", tripId), { days, tripName: document.getElementById('tripName').value });
     } catch(e) { console.error('save error', e); }
-    finally { pendingSave = false; }
+    finally {
+      hasPendingSave = false;
+      saveTimer = null;
+      // 保存完了後、編集中でなければキューのスナップを適用
+      if (pendingSnap && !isEditingNow()) applySnap(pendingSnap);
+    }
   }, 500);
 }
 
 // Firestoreからリアルタイム受信
 onSnapshot(doc(db, "trips", tripId), (snap) => {
-  // ローカルに未送信の変更がある場合はFirestoreの受信をスキップ（上書き防止）
-  if (pendingSave) return;
-  if (snap.exists()) {
-    // 入力中（フォーカスがinputにある）はdaysの上書きも再描画もスキップ
-    const focused = document.activeElement;
-    const isEditing = focused && (focused.tagName==='INPUT'||focused.tagName==='TEXTAREA');
-    if (isEditing) return;
-    isSyncing = true;
-    const data = snap.data();
-    days = data.days || [];
-    document.getElementById('tripName').value = data.tripName || '';
-    days.forEach(d => d.events.forEach(e => { if (e.id >= nextId) nextId = e.id + 1; }));
-    curDay = Math.min(curDay, Math.max(0, days.length - 1));
-    renderHeader();
-    renderTimeline();
-    isSyncing = false;
-  } else {
+  // ① 自分自身の書き込みエコーはスキップ（Firestoreはローカル書き込みでもonSnapshotを発火する）
+  if (snap.metadata.hasPendingWrites) return;
+
+  if (!snap.exists()) {
     // 初回：デフォルトデータを作成して保存
     days=[{
       date:'10/10',
@@ -415,8 +433,28 @@ onSnapshot(doc(db, "trips", tripId), (snap) => {
       ]
     }];
     saveToFirestore();
+    return;
   }
+
+  // ② 自分が入力中 or 保存中はキューに入れて後で適用（stale closure / 上書き防止）
+  if (isEditingNow() || hasPendingSave) {
+    pendingSnap = snap;
+    return;
+  }
+
+  applySnap(snap);
 });
+
+// 入力終了時（blur）にキューのスナップショットを適用
+document.addEventListener('blur', (e) => {
+  if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA') return;
+  // 少し待ってフォーカスが別のinputに移っていないか確認してから適用
+  setTimeout(() => {
+    if (!isEditingNow() && !hasPendingSave && pendingSnap) {
+      applySnap(pendingSnap);
+    }
+  }, 200);
+}, true);
 
 function getEvents(){return days[curDay]?days[curDay].events:[];}
 function parseT(s){if(!s||!s.includes(':'))return null;const[h,m]=s.split(':').map(Number);return isNaN(h)||isNaN(m)?null:h*60+m}
