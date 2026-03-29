@@ -375,29 +375,65 @@ function mkEvent(name,fixedTime,dur){return{id:nextId++,name,fixedTime,dur,check
 const clientId = crypto.randomUUID(); // このタブ固有のID
 
 let saveTimer = null;
-let pendingSnap = null; // 編集中に届いた他人のスナップショット
+let pendingSnap = null;    // 編集中に届いた他人のスナップショット
+let lastSavedDays = null;  // 最後にFirestoreへの保存が確定した状態（マージの基準点）
 
 function isEditingNow() {
   const el = document.activeElement;
   return !!(el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA'));
 }
 
+// ── 3ウェイマージ ─────────────────────────────────────────
+// remote  : 相手から届いたデータ
+// local   : 自分のメモリ上の最新状態（未保存の変更を含む）
+// base    : 最後に確定保存した状態（両者の「出発点」）
+//
+// 各フィールドについて：
+//   ・自分が base から変えた → 自分の値を優先
+//   ・自分は変えていないが相手が変えた → 相手の値を使う
+//   ・両方が変えた（衝突） → 自分の値を優先
+function threeWayMerge(remote, local, base) {
+  if (!base) return remote; // 初回ロード時はそのまま
+
+  const EV_FIELDS = ['name', 'fixedTime', 'dur', 'checks', 'open'];
+
+  return remote.map((remDay, di) => {
+    const locDay = local[di];
+    const baseDay = base[di];
+    if (!locDay || !baseDay) return remDay;
+
+    const mergedEvents = remDay.events.map(remEv => {
+      const locEv = locDay.events.find(e => e.id === remEv.id);
+      const baseEv = baseDay.events.find(e => e.id === remEv.id);
+      if (!locEv || !baseEv) return remEv;
+
+      const merged = { ...remEv };
+      EV_FIELDS.forEach(key => {
+        const locVal  = JSON.stringify(locEv[key]);
+        const baseVal = JSON.stringify(baseEv[key]);
+        // ローカルが base から変わっていれば自分の変更を優先
+        if (locVal !== baseVal) merged[key] = locEv[key];
+      });
+      return merged;
+    });
+
+    return { ...remDay, events: mergedEvents };
+  });
+}
+
 function applySnap(snap) {
   if (!snap.exists()) return;
-  // Bug Fix 3a: ローカルに未送信の保存がある場合はリモート適用をスキップ。
-  // saveTimer が残っている = ユーザーの最新操作がまだFirestoreに届いていない。
-  // ここで上書きするとその変更が失われる。タイマー発火→確認スナップ到着後に
-  // 改めて他ユーザーのスナップが来るまで待つ。
-  if (saveTimer !== null) return;
   isSyncing = true;
   const data = snap.data();
-
-  // 他人のデータを受け取る前に、自分がメモリ上で持っている変更をFirestoreデータにマージする
-  // （saveToFirestore で送信済みの内容はFirestore側が正しいのでそのまま使う）
   const incoming = data.days || [];
 
-  // 現在の days を上書き
-  days = incoming;
+  // リモートデータにローカルの未保存変更をマージする
+  const merged = threeWayMerge(incoming, days, lastSavedDays);
+
+  // 初回ロード時は受信データを基準点として記録する
+  if (!lastSavedDays) lastSavedDays = JSON.parse(JSON.stringify(incoming));
+
+  days = merged;
   document.getElementById('tripName').value = data.tripName || '';
   days.forEach(d => d.events.forEach(e => { if (e.id >= nextId) nextId = e.id + 1; }));
   curDay = Math.min(curDay, Math.max(0, days.length - 1));
@@ -423,6 +459,16 @@ function applySnap(snap) {
     const el = document.querySelector(sel);
     if (el && focusedValue !== null) { el.value = focusedValue; el.focus(); }
   }
+
+  // ★ 本修正の核心：
+  // 保存予約（saveTimer）が残っている場合、その daysToSave はマージ前の古いデータ。
+  // そのまま発火すると相手の変更を上書きしてしまうので、
+  // 予約をキャンセルしてマージ済みの days で撮り直す。
+  if (saveTimer !== null) {
+    clearTimeout(saveTimer);
+    saveTimer = null;
+    saveToFirestore();
+  }
 }
 
 function saveToFirestore() {
@@ -438,8 +484,15 @@ function saveToFirestore() {
       await setDoc(doc(db, "trips", tripId), {
         days: daysToSave,
         tripName: nameToSave,
-        _lastEditor: clientId  // 「誰が最後に保存したか」を記録
+        _lastEditor: clientId
       });
+      // 保存が確定したので基準点を更新する
+      // applySnap の 3ウェイマージはこの値を使って「自分が変えた箇所」を判定する
+      lastSavedDays = daysToSave;
+      saveTimer = null;
+      // 保存完了後、溜まっていた他ユーザーのスナップを適用する
+      // このタイミングで適用することで「入力中に届いた変更」も確実に反映される
+      if (pendingSnap && !isEditingNow()) applySnap(pendingSnap);
     } catch(e) {
       console.error('save error', e);
       // 保存失敗を画面に表示
@@ -449,7 +502,7 @@ function saveToFirestore() {
       document.body.appendChild(hint);
       setTimeout(()=>hint.remove(), 4000);
     }
-    saveTimer = null;
+    if (saveTimer !== null) saveTimer = null;
   }, 500);
 }
 
