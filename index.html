@@ -784,14 +784,27 @@ function renderChecklist(evs,evIdx){
     const inp=document.createElement('input');inp.className='check-text'+(c.done?' done':'');inp.value=c.text;
     inp.addEventListener('input',function(){c.text=this.value;saveToFirestore();});
     const del=document.createElement('button');del.className='check-del';del.textContent='×';
-    del.addEventListener('click',()=>{checks.splice(ci,1);renderChecklist(evs,evIdx);});
+    del.addEventListener('click',()=>{checks.splice(ci,1);renderChecklist(evs,evIdx);saveToFirestore();});
     row.appendChild(box);row.appendChild(inp);row.appendChild(del);cl.appendChild(row);
   });
   const ar=document.createElement('div');ar.className='add-check';
   const plus=document.createElement('span');plus.textContent='＋';plus.style.cssText='font-size:14px;color:#3b82f6;flex-shrink:0;font-family:"M PLUS Rounded 1c",sans-serif';
   const ai=document.createElement('input');ai.className='add-check-input';ai.placeholder='やることを追加';
-  ai.addEventListener('keydown',e=>{if(e.key==='Enter'&&ai.value.trim()){checks.push({text:ai.value.trim(),done:false});ai.value='';renderChecklist(evs,evIdx);}});
-  ai.addEventListener('blur',()=>{if(ai.value.trim()){checks.push({text:ai.value.trim(),done:false});ai.value='';renderChecklist(evs,evIdx);}});
+  function commitAddCheck(){
+    const val=ai.value.trim();
+    if(!val)return;
+    checks.push({text:val,done:false});
+    ai.value='';
+    renderChecklist(evs,evIdx);
+    saveToFirestore();
+    // フォーカスを新しい入力欄に戻す
+    setTimeout(()=>{
+      const inputs=cl.querySelectorAll('.add-check-input');
+      if(inputs.length)inputs[inputs.length-1].focus();
+    },30);
+  }
+  ai.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();commitAddCheck();}});
+  // blurで追加はフォーカス移動で誤爆するので削除→Enterのみにする
   ar.appendChild(plus);ar.appendChild(ai);cl.appendChild(ar);
 }
 
