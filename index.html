@@ -414,17 +414,26 @@ function fmtT(m){if(m==null||isNaN(m))return'--:--';const h=Math.floor(m/60)%24,
 
 function computeTimes(evs){
   const n=evs.length,times=new Array(n).fill(null);
+  // まず固定時刻を埋める
   for(let i=0;i<n;i++)if(evs[i].fixedTime)times[i]=parseT(evs[i].fixedTime);
-  for(let i=0;i<n-1;i++){
-    if(evs[i+1].fixedTime&&times[i]!=null){
-      const nf=parseT(evs[i+1].fixedTime);
-      if(nf!=null)evs[i].dur=Math.max(0,nf-times[i]);
-    }
-  }
+  // 前→後ろ方向に順算
   let cur=null;
   for(let i=0;i<n;i++){
     if(evs[i].fixedTime){cur=parseT(evs[i].fixedTime);times[i]=cur;}
     else if(cur!==null&&i>0){const d=evs[i-1].dur;if(d!=null&&!isNaN(d)){cur=cur+d;times[i]=cur;}else cur=null;}
+  }
+  // 後ろ→前方向に逆算（固定時刻より前のイベントを埋める）
+  for(let i=n-1;i>=0;i--){
+    if(times[i]!=null){
+      // iより前でtimes[j]がnullのものを逆算
+      let base=times[i];
+      for(let j=i-1;j>=0;j--){
+        if(times[j]!=null) break; // すでに確定済みなら止まる
+        const dur=evs[j].dur;
+        if(dur!=null&&!isNaN(dur)){base=base-dur;times[j]=base;}
+        else break;
+      }
+    }
   }
   return times;
 }
