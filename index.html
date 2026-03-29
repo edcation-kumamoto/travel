@@ -113,10 +113,18 @@ body::before{
 
 /* コネクター長押しヒント */
 .connector.lp-hint .conn-right::after{
-  content:'＋ ここに追加';
+  content:'長押し中…';
   font-size:10px;color:#2E7D78;font-weight:700;
   font-family:'M PLUS Rounded 1c',sans-serif;
   opacity:.7;
+}
+.connector.lp-ready .conn-right::after{
+  content:'↕ ドラッグして追加';
+  font-size:11px;color:#fff;font-weight:700;
+  font-family:'M PLUS Rounded 1c',sans-serif;
+}
+.connector.lp-ready .conn-right{
+  background:#2E7D78;border-radius:20px;padding:4px 10px;
 }
 
 /* ドット行 */
@@ -146,7 +154,10 @@ body::before{
   font-size:11px;font-weight:700;color:rgba(200,80,60,.9);
   cursor:pointer;font-family:'M PLUS Rounded 1c',sans-serif;
   touch-action:manipulation;white-space:nowrap;
+  opacity:1;pointer-events:auto;
+  transition:opacity .25s ease;
 }
+.del-day-btn.hidden{opacity:0;pointer-events:none}
 .del-day-btn:active{background:rgba(192,57,43,.28)}
 
 /* スワイプヒント */
@@ -167,8 +178,26 @@ body::before{
 }
 .swipe-prev-hint.show{opacity:1}
 
+/* ── スライドコンテナ ── */
+.slide-viewport{width:100%;position:relative;overflow:hidden}
+.slide-track{
+  display:flex;width:300%;
+  will-change:transform;
+}
+.slide-pane{width:33.333%;flex-shrink:0;min-height:200px}
+
+/* 新日程作成オーバーレイ */
+.create-overlay{
+  position:absolute;top:0;left:0;right:0;bottom:0;
+  display:flex;align-items:center;justify-content:center;
+  flex-direction:column;gap:10px;
+  pointer-events:none;opacity:0;transition:opacity .15s;
+}
+.create-overlay .co-icon{font-size:36px;font-family:'M PLUS Rounded 1c',sans-serif;color:#2E7D78;font-weight:900}
+.create-overlay .co-label{font-size:15px;font-weight:700;color:#2E7D78;font-family:'M PLUS Rounded 1c',sans-serif;background:rgba(245,200,66,.85);padding:6px 18px;border-radius:20px}
+
 /* ── タイムライン ── */
-.timeline-area{padding:12px 12px 4px;overflow-x:hidden;width:100%}
+.timeline-area{padding:12px 12px 4px;width:100%}
 .empty-hint{text-align:center;padding:48px 20px;color:#7a6010;font-size:14px;font-family:'M PLUS Rounded 1c',sans-serif;line-height:1.8}
 .empty-hint .big{font-size:36px;margin-bottom:10px;letter-spacing:-.02em;color:#b08800;font-weight:900}
 
@@ -325,11 +354,22 @@ body::before{
     </div>
   </div>
 
-  <div class="timeline-area" id="timelineArea"></div>
+  <div class="slide-viewport" id="slideViewport">
+    <div class="slide-track" id="slideTrack">
+      <div class="slide-pane" id="panePrev"></div>
+      <div class="slide-pane" id="paneCur">
+        <div class="timeline-area" id="timelineArea"></div>
+      </div>
+      <div class="slide-pane" id="paneNext" style="position:relative">
+        <div class="create-overlay" id="createOverlay">
+          <div class="co-icon">＋</div>
+          <div class="co-label" id="createLabel">日程を作成</div>
+        </div>
+      </div>
+    </div>
+  </div>
 </div>
 <button class="del-day-btn" id="delDayBtn">日程削除</button>
-<div class="swipe-create-hint" id="swipeCreateHint">＋ 日程を作成 →</div>
-<div class="swipe-prev-hint" id="swipePrevHint">← 前の日</div>
 
 <div class="dur-picker" id="durPicker">
   <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px 8px;border-bottom:.5px solid #f0f0f0">
@@ -672,84 +712,163 @@ function maxDurFor(idx,times,evs){
 }
 
 function goDay(d){curDay=Math.max(0,Math.min(days.length-1,d));renderHeader();renderTimeline();}
-document.getElementById('prevDay').addEventListener('click',()=>goDay(curDay-1));
-document.getElementById('nextDay').addEventListener('click',()=>goDay(curDay+1));
 
-// ── スワイプで日移動 ──────────────────────────────────────
-(function(){
-  const SWIPE_THRESHOLD=60; // px: この距離超えたら確定
-  const HINT_TRIGGER=30;    // px: ヒント表示開始
-  let swX=null,swY=null,swLocked=null;
-  const createHint=document.getElementById('swipeCreateHint');
-  const prevHint=document.getElementById('swipePrevHint');
+// ── スライド日移動 グローバル関数群 ──────────────────────
+const COMMIT_RATIO    = 0.35;
+const CREATE_RATIO    = 0.33;
+const CREATE_COMMIT_RATIO = 0.55;
 
-  function addDay(){
-    const last=days[days.length-1];
-    let newDate='';
-    if(last&&last.date){
-      const parts=last.date.split('/');
-      if(parts.length===2){
-        const year=new Date().getFullYear();
-        const dt=new Date(year,parseInt(parts[0])-1,parseInt(parts[1])+1);
-        newDate=`${dt.getMonth()+1}/${dt.getDate()}`;
-      }
-    }
-    days.push({date:newDate,events:[]});
-    curDay=days.length-1;
-    renderHeader();renderTimeline();saveToFirestore();
+function getSlideW(){ return (document.getElementById('slideViewport')||{}).offsetWidth || window.innerWidth; }
+
+function setTrackX(x, animate){
+  const track    = document.getElementById('slideTrack');
+  const viewport = document.getElementById('slideViewport');
+  if(!track||!viewport) return;
+  const W   = viewport.offsetWidth;
+  const base= -100/3;
+  const pct = base + (x/W)*(100/3);
+  track.style.transition = animate ? 'transform .32s cubic-bezier(.4,0,.2,1)' : 'none';
+  track.style.transform  = `translateX(${pct}%)`;
+}
+
+function renderPaneContent(pane, dayIdx){
+  if(!pane) return;
+  pane.innerHTML='';
+  if(dayIdx < 0 || dayIdx >= days.length) return;
+  const frag=document.createElement('div');
+  frag.className='timeline-area';
+  frag.style.cssText='pointer-events:none;opacity:.52;';
+  renderTimelineInto(frag, days[dayIdx].events, dayIdx);
+  pane.appendChild(frag);
+}
+
+function prepareAdjacentPanes(){
+  const overlay  = document.getElementById('createOverlay');
+  const panePrev = document.getElementById('panePrev');
+  const paneNext = document.getElementById('paneNext');
+  renderPaneContent(panePrev, curDay-1);
+  paneNext.innerHTML='';
+  if(curDay < days.length-1){
+    const frag=document.createElement('div');
+    frag.className='timeline-area';
+    frag.style.cssText='pointer-events:none;opacity:.52;';
+    renderTimelineInto(frag, days[curDay+1].events, curDay+1);
+    paneNext.appendChild(frag);
+  } else {
+    if(overlay){ paneNext.appendChild(overlay); overlay.style.opacity='0'; overlay.style.minHeight='200px'; }
   }
+  setTrackX(0,false);
+}
 
-  document.getElementById('timelineArea').addEventListener('touchstart',e=>{
-    // ピッカー開いてたら無視
-    if(document.getElementById('durPicker').style.display==='block')return;
-    if(document.getElementById('timePopup').style.display==='block')return;
-    // ドラッグ中も無視
-    if(touchDragData)return;
+function addDay(){
+  const last=days[days.length-1];
+  let newDate='';
+  if(last&&last.date&&last.date.includes('/')){
+    const parts=last.date.split('/');
+    const year=new Date().getFullYear();
+    const dt=new Date(year,parseInt(parts[0])-1,parseInt(parts[1])+1);
+    newDate=`${dt.getMonth()+1}/${dt.getDate()}`;
+  }
+  days.push({date:newDate,events:[]});
+  curDay=days.length-1;
+  renderHeader();renderTimeline();saveToFirestore();
+}
+
+// ── タッチスワイプ ──
+(function(){
+  let swX=null,swY=null,swLocked=null,swActive=false;
+
+  function getOverlay(){ return document.getElementById('createOverlay'); }
+  function getCreateLbl(){ return document.getElementById('createLabel'); }
+
+  document.addEventListener('touchstart',e=>{
+    if(document.getElementById('durPicker').style.display==='block') return;
+    if(document.getElementById('timePopup').style.display==='block') return;
+    if(touchDragData) return;
+    // input要素上は無視
+    if(e.target.closest('input,button,.drag-handle,.dur-btn,.ev-time,.list-toggle,.check-box,.ev-delete-badge')) return;
     swX=e.touches[0].clientX;
     swY=e.touches[0].clientY;
-    swLocked=null;
+    swLocked=null; swActive=false;
+    document.getElementById('slideViewport').style.touchAction='pan-y';
   },{passive:true});
 
-  document.getElementById('timelineArea').addEventListener('touchmove',e=>{
-    if(swX===null||touchDragData)return;
+  document.addEventListener('touchmove',e=>{
+    if(swX===null||touchDragData) return;
     const dx=e.touches[0].clientX-swX;
     const dy=e.touches[0].clientY-swY;
-    // 縦スクロールが優先
     if(swLocked===null){
-      if(Math.abs(dy)>Math.abs(dx)+6){swLocked='y';return;}
-      if(Math.abs(dx)>10)swLocked='x';
+      if(Math.abs(dy)>Math.abs(dx)+10){ swLocked='y'; return; }
+      if(Math.abs(dx)>8){
+        swLocked='x'; swActive=true;
+        document.getElementById('slideViewport').style.touchAction='none';
+        prepareAdjacentPanes();
+      }
     }
-    if(swLocked!=='x')return;
+    if(swLocked!=='x') return;
 
-    // 右端（最終日）を超えるスワイプ：日程作成ヒント
-    if(dx<-HINT_TRIGGER&&curDay>=days.length-1){
-      createHint.classList.add('show');
+    const W=getSlideW();
+    let cdx=dx;
+
+    // 一番左（前日なし）：引っ張り感
+    if(dx>0 && curDay<=0) cdx=dx*0.22;
+    // 一番右（次の日なし）：日程作成ゾーン
+    if(dx<0 && curDay>=days.length-1){
+      cdx=dx*0.78;
+      const ratio=Math.abs(dx)/W;
+      const ov=getOverlay(); const lb=getCreateLbl();
+      if(ratio>CREATE_RATIO){
+        if(ov) ov.style.opacity=String(Math.min(1,(ratio-CREATE_RATIO)/0.15));
+        if(lb) lb.textContent=ratio>=CREATE_COMMIT_RATIO?'→ 離して作成！':'日程を作成';
+      } else {
+        if(ov) ov.style.opacity='0';
+      }
     } else {
-      createHint.classList.remove('show');
+      const ov=getOverlay(); if(ov) ov.style.opacity='0';
     }
-    // 左端（最初の日）を超えるスワイプ
-    if(dx>HINT_TRIGGER&&curDay<=0){
-      prevHint.classList.add('show');
-    } else {
-      prevHint.classList.remove('show');
-    }
+    setTrackX(cdx,false);
   },{passive:true});
 
-  document.getElementById('timelineArea').addEventListener('touchend',e=>{
-    createHint.classList.remove('show');
-    prevHint.classList.remove('show');
-    if(swX===null||swLocked!=='x'||touchDragData){swX=null;swY=null;swLocked=null;return;}
+  document.addEventListener('touchend',e=>{
+    document.getElementById('slideViewport').style.touchAction='pan-y';
+    const ov=getOverlay(); if(ov) ov.style.opacity='0';
+    if(!swActive||swLocked!=='x'||touchDragData){ swX=null;swY=null;swLocked=null;swActive=false; return; }
     const dx=e.changedTouches[0].clientX-swX;
-    swX=null;swY=null;swLocked=null;
-    if(dx<-SWIPE_THRESHOLD){
-      // 左スワイプ → 次の日、なければ作成
-      if(curDay<days.length-1){goDay(curDay+1);}
-      else{addDay();}
-    } else if(dx>SWIPE_THRESHOLD){
-      // 右スワイプ → 前の日
-      if(curDay>0)goDay(curDay-1);
+    const W=getSlideW();
+    const ratio=Math.abs(dx)/W;
+    swX=null;swY=null;swLocked=null;swActive=false;
+
+    if(dx < -W*COMMIT_RATIO){
+      if(curDay < days.length-1){
+        setTrackX(-W,true);
+        setTimeout(()=>{ curDay++; renderHeader(); renderTimeline(); },320);
+      } else if(ratio>=CREATE_COMMIT_RATIO){
+        setTrackX(-W,true);
+        setTimeout(()=>{ addDay(); },320);
+      } else {
+        setTrackX(0,true);
+      }
+    } else if(dx > W*COMMIT_RATIO && curDay>0){
+      setTrackX(W,true);
+      setTimeout(()=>{ curDay--; renderHeader(); renderTimeline(); },320);
+    } else {
+      setTrackX(0,true);
     }
   },{passive:true});
+
+  // ナビボタン
+  document.getElementById('prevDay').addEventListener('click',()=>{
+    if(curDay<=0) return;
+    prepareAdjacentPanes();
+    setTrackX(getSlideW(),true);
+    setTimeout(()=>{ curDay--; renderHeader(); renderTimeline(); },320);
+  });
+  document.getElementById('nextDay').addEventListener('click',()=>{
+    if(curDay>=days.length-1) return;
+    prepareAdjacentPanes();
+    setTrackX(-getSlideW(),true);
+    setTimeout(()=>{ curDay++; renderHeader(); renderTimeline(); },320);
+  });
 })();
 
 document.getElementById('delDayBtn').addEventListener('click',()=>{
@@ -813,7 +932,9 @@ function renderDots(){
 }
 
 window.addEventListener('scroll',()=>{
-  document.getElementById('appHead').classList.toggle('compact',window.scrollY>28);
+  const isCompact = window.scrollY > 28;
+  document.getElementById('appHead').classList.toggle('compact', isCompact);
+  document.getElementById('delDayBtn').classList.toggle('hidden', isCompact);
 },{passive:true});
 
 /* ── ドラッグ&ドロップ ── */
@@ -861,22 +982,34 @@ function setupDragDrop(){
     dz.addEventListener('drop',e=>{e.preventDefault();handleDrop(parseInt(dz.dataset.insert));});
   });
 
-  /* コネクター長押し → その位置に新イベント挿入 */
+  /* コネクター2秒長押し → ドラッグして新イベント挿入 */
   document.querySelectorAll('.connector').forEach((conn,ci)=>{
     let lpTimer=null;
+    let lpReady=false;
+
     function lpStart(e){
       if(touchDragData)return;
+      lpReady=false;
       conn.classList.add('lp-hint');
       lpTimer=setTimeout(()=>{
+        lpReady=true;
+        if(navigator.vibrate)navigator.vibrate([30,30,50]);
         conn.classList.remove('lp-hint');
+        conn.classList.add('lp-ready');
+        // タッチ位置を取得してクローンを作成
+        const touch=e.touches?e.touches[0]:e;
         exitJiggle();
-        const ins=ci+1; // connector ci は evs[ci] と evs[ci+1] の間
-        getEvents().splice(ins,0,mkEvent('新しいイベント',null,60));
-        renderTimeline();saveToFirestore();
-        setTimeout(()=>{const ns=document.querySelectorAll('.ev-name');if(ns[ins]){ns[ins].focus();ns[ins].select();}},50);
-      },500);
+        const ins=ci+1;
+        touchDragData={src:'new',insertIdx:ins,startX:touch.clientX,startY:touch.clientY};
+        createTouchClone('＋ 新イベント',touch.clientX,touch.clientY);
+      },2000);
     }
-    function lpEnd(){conn.classList.remove('lp-hint');clearTimeout(lpTimer);lpTimer=null;}
+    function lpEnd(){
+      conn.classList.remove('lp-hint','lp-ready');
+      if(!lpReady) clearTimeout(lpTimer);
+      lpTimer=null;
+      lpReady=false;
+    }
     conn.addEventListener('mousedown',lpStart);
     conn.addEventListener('mouseup',lpEnd);
     conn.addEventListener('mouseleave',lpEnd);
@@ -885,7 +1018,7 @@ function setupDragDrop(){
     conn.addEventListener('touchcancel',lpEnd);
   });
 
-  /* ev-wrap 長押し → jiggle モード (ドラッグハンドル以外の場所) */
+  /* ev-card 2秒長押し → 削除バッジ表示 */
   document.querySelectorAll('.ev-card').forEach((card,i)=>{
     let lpTimer=null;
     function lpStart(e){
@@ -893,8 +1026,8 @@ function setupDragDrop(){
       lpTimer=setTimeout(()=>{
         exitJiggle();
         card.closest('.ev-wrap').classList.add('jiggle');
-        if(navigator.vibrate)navigator.vibrate(30);
-      },500);
+        if(navigator.vibrate)navigator.vibrate([30,20,60]);
+      },2000);
     }
     function lpEnd(){clearTimeout(lpTimer);lpTimer=null;}
     card.addEventListener('mousedown',lpStart);
@@ -923,7 +1056,6 @@ document.addEventListener('touchmove',e=>{
   const el=document.elementFromPoint(t.clientX,t.clientY);
   if(el){
     const dz=el.closest('.drop-zone');if(dz)dz.classList.add('over');
-    const tr=el.closest('#trash');if(tr)tr.classList.add('over');
   }
 },{passive:true});
 
@@ -931,6 +1063,23 @@ document.addEventListener('touchend',e=>{
   if(!touchDragData){removeTouchClone();return;}
   removeTouchClone();
   const t=e.changedTouches[0];
+
+  if(touchDragData.src==='new'){
+    // 新イベント挿入
+    const el=document.elementFromPoint(t.clientX,t.clientY);
+    let ins=touchDragData.insertIdx; // デフォルト：元のコネクター位置
+    if(el){
+      const dz=el.closest('.drop-zone');
+      if(dz) ins=parseInt(dz.dataset.insert);
+    }
+    cleanDZ();
+    touchDragData=null;
+    getEvents().splice(ins,0,mkEvent('新しいイベント',null,60));
+    renderTimeline();saveToFirestore();
+    setTimeout(()=>{const ns=document.querySelectorAll('.ev-name');if(ns[ins]){ns[ins].focus();ns[ins].select();}},50);
+    return;
+  }
+
   const el=document.elementFromPoint(t.clientX,t.clientY);
   if(el){
     const dz=el.closest('.drop-zone');
@@ -1105,23 +1254,44 @@ function renderChecklist(evs,evIdx){
 function renderTimeline(){
   const tl=document.getElementById('timelineArea');
   tl.innerHTML='';
-  const evs=getEvents();
+  renderTimelineInto(tl, getEvents(), curDay);
+  // トラック位置をリセット（スライドアニメ完了後）
+  setTrackX(0,false);
+  // 隣接ペインをサイレント更新
+  const panePrev=document.getElementById('panePrev');
+  const paneNext=document.getElementById('paneNext');
+  if(panePrev) renderPaneContent(panePrev, curDay-1);
+  if(paneNext){
+    const overlay=document.getElementById('createOverlay');
+    if(curDay < days.length-1){
+      renderPaneContent(paneNext, curDay+1);
+    } else {
+      paneNext.innerHTML='';
+      if(overlay){ paneNext.appendChild(overlay); overlay.style.opacity='0'; overlay.style.minHeight='200px'; }
+    }
+  }
+}
+
+function renderTimelineInto(tl, evs, dayIdx){
+  const isMainPane = (tl === document.getElementById('timelineArea'));
   if(!days.length){
-    tl.innerHTML='<div class="empty-hint"><div class="big">—</div>上の「日程を追加」から始めましょう</div>';
-    setupDragDrop();return;
+    if(isMainPane) tl.innerHTML='<div class="empty-hint"><div class="big">—</div>上の「日程を追加」から始めましょう</div>';
+    if(isMainPane) setupDragDrop();return;
   }
   if(!evs.length){
     const hint=document.createElement('div');
     hint.className='empty-hint';
     hint.innerHTML='<div class="big">＋</div>この余白を長押しして<br>最初のイベントを追加';
     hint.style.cursor='pointer';
-    let lpT=null;
-    hint.addEventListener('touchstart',()=>{lpT=setTimeout(()=>{getEvents().push(mkEvent('新しいイベント',null,60));renderTimeline();saveToFirestore();},500);},{passive:true});
-    hint.addEventListener('touchend',()=>clearTimeout(lpT));
-    hint.addEventListener('mousedown',()=>{lpT=setTimeout(()=>{getEvents().push(mkEvent('新しいイベント',null,60));renderTimeline();saveToFirestore();},500);});
-    hint.addEventListener('mouseup',()=>clearTimeout(lpT));
+    if(isMainPane){
+      let lpT=null;
+      hint.addEventListener('touchstart',()=>{lpT=setTimeout(()=>{getEvents().push(mkEvent('新しいイベント',null,60));renderTimeline();saveToFirestore();},500);},{passive:true});
+      hint.addEventListener('touchend',()=>clearTimeout(lpT));
+      hint.addEventListener('mousedown',()=>{lpT=setTimeout(()=>{getEvents().push(mkEvent('新しいイベント',null,60));renderTimeline();saveToFirestore();},500);});
+      hint.addEventListener('mouseup',()=>clearTimeout(lpT));
+    }
     tl.appendChild(hint);
-    setupDragDrop();return;
+    if(isMainPane) setupDragDrop();return;
   }
 
   const times=computeTimes(evs);
@@ -1208,7 +1378,7 @@ function renderTimeline(){
   });
 
   tl.appendChild(makeDZ(evs.length));
-  setupDragDrop();
+  if(isMainPane) setupDragDrop();
 }
 
 document.getElementById('tripName').addEventListener('input', saveToFirestore);
