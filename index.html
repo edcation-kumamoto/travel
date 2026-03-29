@@ -111,21 +111,33 @@ body::before{
 }
 .ev-del-btn:active{background:#c0392b;transform:scale(.92)}
 
-/* コネクター長押しヒント */
-.connector.lp-hint .conn-right::after{
-  content:'長押し中…';
-  font-size:10px;color:#2E7D78;font-weight:700;
+/* ── イベント追加ボタン（コネクター長押しで出現） ── */
+.conn-add-btn{
+  width:30px;height:30px;border-radius:50%;
+  background:#3b82f6;color:#fff;
+  border:none;font-size:18px;font-weight:900;line-height:1;
+  display:none;align-items:center;justify-content:center;
+  cursor:grab;flex-shrink:0;
+  box-shadow:0 3px 10px rgba(59,130,246,.5);
+  touch-action:none;user-select:none;
+  transition:transform .12s;
+}
+.conn-add-btn.visible{display:flex}
+.conn-add-btn:active{transform:scale(.9)}
+
+/* ドロップターゲット（イベント上下） */
+.ev-wrap.add-target-above::before,
+.ev-wrap.add-target-below::after{
+  content:'イベントを追加';
+  display:block;
+  background:#3b82f6;color:#fff;
+  font-size:11px;font-weight:700;
   font-family:'M PLUS Rounded 1c',sans-serif;
-  opacity:.7;
+  text-align:center;padding:6px 0;
+  border-radius:10px;margin:2px 0;
 }
-.connector.lp-ready .conn-right::after{
-  content:'↕ ドラッグして追加';
-  font-size:11px;color:#fff;font-weight:700;
-  font-family:'M PLUS Rounded 1c',sans-serif;
-}
-.connector.lp-ready .conn-right{
-  background:#2E7D78;border-radius:20px;padding:4px 10px;
-}
+.ev-wrap.add-target-above::before{margin-bottom:4px}
+.ev-wrap.add-target-below::after{margin-top:4px}
 
 /* ドット行 */
 .date-dots-wrap{display:flex;justify-content:center}
@@ -203,8 +215,8 @@ body::before{
 
 /* ドロップゾーン */
 .drop-zone{height:4px;border-radius:4px;transition:all .15s;margin:0 52px}
-.drop-zone.over{height:30px;background:rgba(46,125,120,.18);margin:2px 52px;border-radius:10px;display:flex;align-items:center;justify-content:center}
-.drop-zone.over::after{content:'ここに追加';font-size:10px;color:#2E7D78;font-weight:700;font-family:'M PLUS Rounded 1c',sans-serif}
+.drop-zone.over{height:30px;background:rgba(59,130,246,.15);margin:2px 52px;border-radius:10px;display:flex;align-items:center;justify-content:center;border:1.5px dashed rgba(59,130,246,.5)}
+.drop-zone.over::after{content:'イベントを追加';font-size:11px;color:#3b82f6;font-weight:700;font-family:'M PLUS Rounded 1c',sans-serif}
 
 /* ── イベント ── */
 .ev-wrap{position:relative}
@@ -948,6 +960,10 @@ function exitJiggle(){
   });
 }
 
+function hideAllAddBtns(){
+  document.querySelectorAll('.conn-add-btn.visible').forEach(b=>b.classList.remove('visible'));
+}
+
 function setupDragDrop(){
   /* ── イベントカード：長押し削除 & デスクトップドラッグ ── */
   document.querySelectorAll('.ev-wrap').forEach((el,i)=>{
@@ -974,7 +990,7 @@ function setupDragDrop(){
       e.stopPropagation();
       const t=e.touches[0];
       touchDragData={src:i,startX:t.clientX,startY:t.clientY};
-      createTouchClone(getEvents()[i]?.name||'イベント',t.clientX,t.clientY);
+      createTouchClone('⠿',t.clientX,t.clientY,'#2E7D78');
     },{passive:true});
   });
 
@@ -985,40 +1001,70 @@ function setupDragDrop(){
     dz.addEventListener('drop',e=>{e.preventDefault();handleDrop(parseInt(dz.dataset.insert));});
   });
 
-  /* コネクター2秒長押し → ドラッグして新イベント挿入 */
+  /* コネクター1秒長押し → ＋ボタン出現、そのままドラッグして挿入 */
   document.querySelectorAll('.connector').forEach((conn,ci)=>{
     let lpTimer=null;
-    let lpReady=false;
+    let lpFired=false;
+    const addBtn=conn.querySelector('.conn-add-btn');
+    if(!addBtn) return;
+    const ins=parseInt(addBtn.dataset.insertIdx);
 
-    function lpStart(e){
+    function showAddBtn(touchX,touchY){
+      addBtn.classList.add('visible');
+      if(navigator.vibrate)navigator.vibrate(40);
+      // そのままドラッグ開始
+      exitJiggle();
+      touchDragData={src:'new',insertIdx:ins,startX:touchX,startY:touchY};
+      createTouchClone('＋',touchX,touchY,'#3b82f6');
+    }
+
+    // タッチ長押し
+    conn.addEventListener('touchstart',e=>{
       if(touchDragData)return;
-      lpReady=false;
-      conn.classList.add('lp-hint');
+      if(e.target.closest('.dur-btn,.conn-add-btn'))return;
+      lpFired=false;
+      const t=e.touches[0];
       lpTimer=setTimeout(()=>{
-        lpReady=true;
-        if(navigator.vibrate)navigator.vibrate([30,30,50]);
-        conn.classList.remove('lp-hint');
-        conn.classList.add('lp-ready');
-        // タッチ位置を取得してクローンを作成
-        const touch=e.touches?e.touches[0]:e;
-        exitJiggle();
-        const ins=ci+1;
-        touchDragData={src:'new',insertIdx:ins,startX:touch.clientX,startY:touch.clientY};
-        createTouchClone('＋ 新イベント',touch.clientX,touch.clientY);
-      },2000);
-    }
-    function lpEnd(){
-      conn.classList.remove('lp-hint','lp-ready');
-      if(!lpReady) clearTimeout(lpTimer);
-      lpTimer=null;
-      lpReady=false;
-    }
-    conn.addEventListener('mousedown',lpStart);
-    conn.addEventListener('mouseup',lpEnd);
-    conn.addEventListener('mouseleave',lpEnd);
-    conn.addEventListener('touchstart',lpStart,{passive:true});
-    conn.addEventListener('touchend',lpEnd);
-    conn.addEventListener('touchcancel',lpEnd);
+        lpFired=true;
+        showAddBtn(t.clientX,t.clientY);
+      },800);
+    },{passive:true});
+
+    conn.addEventListener('touchend',e=>{
+      if(!lpFired){clearTimeout(lpTimer);lpTimer=null;}
+    },{passive:true});
+    conn.addEventListener('touchcancel',()=>{clearTimeout(lpTimer);lpTimer=null;lpFired=false;},{passive:true});
+    conn.addEventListener('touchmove',()=>{
+      if(!lpFired){clearTimeout(lpTimer);lpTimer=null;}
+    },{passive:true});
+
+    // ＋ボタン自体のタッチ開始（すでに表示中の場合のドラッグ開始）
+    addBtn.addEventListener('touchstart',e=>{
+      e.stopPropagation();
+      const t=e.touches[0];
+      exitJiggle();
+      touchDragData={src:'new',insertIdx:ins,startX:t.clientX,startY:t.clientY};
+      createTouchClone('＋',t.clientX,t.clientY,'#3b82f6');
+    },{passive:true});
+
+    // マウス長押し（デスクトップ）
+    conn.addEventListener('mousedown',e=>{
+      if(touchDragData)return;
+      if(e.target.closest('.dur-btn,.conn-add-btn'))return;
+      lpFired=false;
+      lpTimer=setTimeout(()=>{
+        lpFired=true;
+        addBtn.classList.add('visible');
+        if(navigator.vibrate)navigator.vibrate(40);
+      },800);
+    });
+    conn.addEventListener('mouseup',()=>{clearTimeout(lpTimer);lpTimer=null;});
+    conn.addEventListener('mouseleave',()=>{if(!lpFired){clearTimeout(lpTimer);lpTimer=null;}});
+
+    addBtn.addEventListener('mousedown',e=>{
+      e.stopPropagation();
+      dragSrc='new-'+ins;
+    });
   });
 
   /* ev-name 2秒長押し → 削除モード */
@@ -1045,11 +1091,12 @@ function setupDragDrop(){
   });
 }
 
-function createTouchClone(text,x,y){
+function createTouchClone(text,x,y,color){
   removeTouchClone();
+  const bg=color||'#2E7D78';
   touchClone=document.createElement('div');
   touchClone.textContent=text;
-  touchClone.style.cssText=`position:fixed;left:${x-60}px;top:${y-20}px;width:120px;background:#2E7D78;color:#fff;border-radius:20px;padding:6px 12px;font-size:12px;font-weight:700;text-align:center;pointer-events:none;z-index:9999;opacity:.88;box-shadow:0 4px 16px rgba(0,0,0,.2);font-family:'M PLUS Rounded 1c',sans-serif`;
+  touchClone.style.cssText=`position:fixed;left:${x-22}px;top:${y-22}px;width:44px;height:44px;background:${bg};color:#fff;border-radius:50%;font-size:20px;font-weight:900;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:9999;opacity:.92;box-shadow:0 4px 16px rgba(0,0,0,.22);font-family:'M PLUS Rounded 1c',sans-serif;line-height:1`;
   document.body.appendChild(touchClone);
 }
 function removeTouchClone(){if(touchClone){touchClone.remove();touchClone=null;}}
@@ -1057,7 +1104,7 @@ function removeTouchClone(){if(touchClone){touchClone.remove();touchClone=null;}
 document.addEventListener('touchmove',e=>{
   if(!touchDragData)return;
   const t=e.touches[0];
-  if(touchClone){touchClone.style.left=(t.clientX-60)+'px';touchClone.style.top=(t.clientY-20)+'px';}
+  if(touchClone){touchClone.style.left=(t.clientX-22)+'px';touchClone.style.top=(t.clientY-22)+'px';}
   cleanDZ();
   const el=document.elementFromPoint(t.clientX,t.clientY);
   if(el){
@@ -1066,21 +1113,21 @@ document.addEventListener('touchmove',e=>{
 },{passive:true});
 
 document.addEventListener('touchend',e=>{
+  hideAllAddBtns && hideAllAddBtns();
   if(!touchDragData){removeTouchClone();return;}
   removeTouchClone();
   const t=e.changedTouches[0];
 
   if(touchDragData.src==='new'){
-    // 新イベント挿入
     const el=document.elementFromPoint(t.clientX,t.clientY);
-    let ins=touchDragData.insertIdx; // デフォルト：元のコネクター位置
+    let ins=touchDragData.insertIdx;
     if(el){
       const dz=el.closest('.drop-zone');
       if(dz) ins=parseInt(dz.dataset.insert);
     }
     cleanDZ();
     touchDragData=null;
-    getEvents().splice(ins,0,mkEvent('新しいイベント',null,60));
+    days[curDay].events.splice(ins,0,mkEvent('新しいイベント',null,60));
     renderTimeline();saveToFirestore();
     setTimeout(()=>{const ns=document.querySelectorAll('.ev-name');if(ns[ins]){ns[ins].focus();ns[ins].select();}},50);
     return;
@@ -1400,7 +1447,14 @@ function renderTimelineInto(tl, evs, dayIdx){
       btn.className='dur-btn'+(e.durLocked?' locked':'')+(isWarn?' warn':'');
       btn.innerHTML=`<span style="font-size:10px;opacity:.7">▼</span>${e.durLocked?'<span style="font-size:10px;margin-right:1px">🔒</span>':''}<span>${e.dur!=null?e.dur:'?'}分</span>${isWarn?'<span style="font-size:10px;margin-left:2px">⚠️</span>':''}`;
       btn.addEventListener('click',ev=>{ev.stopPropagation();openDurPicker(i,btn);});
-      cR.appendChild(btn);conn.appendChild(cL);conn.appendChild(cR);tl.appendChild(conn);
+
+      // ＋ボタン（長押し後出現、ドラッグして挿入）
+      const addBtn=document.createElement('button');
+      addBtn.className='conn-add-btn';
+      addBtn.textContent='＋';
+      addBtn.dataset.insertIdx=String(i+1);
+      cR.appendChild(btn);cR.appendChild(addBtn);
+      conn.appendChild(cL);conn.appendChild(cR);tl.appendChild(conn);
     }
   });
 
