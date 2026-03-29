@@ -131,6 +131,7 @@ body::before{
 
 /* 日程追加ボタン */
 .add-day-wrap{display:flex;justify-content:center}
+.add-day-row{display:flex;align-items:center;gap:8px;width:100%;justify-content:center}
 .add-day-btn{
   background:transparent;
   border:1px solid rgba(255,255,255,.22);
@@ -263,13 +264,15 @@ body::before{
 
 /* ── 時刻ポップアップ ── */
 .time-popup{position:fixed;z-index:950;background:#fff;border:.5px solid #e0e0e0;border-radius:20px 20px 0 0;box-shadow:0 -4px 24px rgba(0,0,0,.18);padding:20px 20px 36px;width:100%;display:none}
-.tp-label{font-size:11px;color:#888;margin-bottom:6px;font-family:'M PLUS Rounded 1c',sans-serif}
-.tp-input{width:100%;font-size:24px;font-weight:500;color:#1a1a1a;background:#f5f5f5;border:.5px solid #e0e0e0;border-radius:10px;padding:7px 8px;text-align:center;outline:none;font-family:monospace;margin-bottom:10px}
-.tp-input:focus{border-color:#2E7D78}
-.tp-btns{display:flex;gap:6px}
-.tp-fix{flex:1;padding:8px;border-radius:10px;border:.5px solid #e0e0e0;background:transparent;font-size:12px;font-family:'M PLUS Rounded 1c',sans-serif;cursor:pointer;color:#1a1a1a}
+.tp-drum{overflow-y:scroll;height:160px;scroll-snap-type:y mandatory;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.tp-drum::-webkit-scrollbar{display:none}
+.tp-drum-item{height:40px;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:500;scroll-snap-align:center;cursor:pointer;color:#1a1a1a;font-family:'M PLUS Rounded 1c',sans-serif;user-select:none}
+.tp-drum-item.sel{color:#2E7D78;font-weight:700}
+.tp-drum-pad{height:60px;flex-shrink:0}
+.tp-hl{position:absolute;left:0;right:0;top:60px;height:40px;border-top:1.5px solid #2E7D78;border-bottom:1.5px solid #2E7D78;pointer-events:none}
+.tp-fix{padding:8px 14px;border-radius:10px;border:.5px solid #e0e0e0;background:transparent;font-size:12px;font-family:'M PLUS Rounded 1c',sans-serif;cursor:pointer;color:#1a1a1a}
 .tp-fix.on{background:rgba(192,57,43,.1);border-color:rgba(192,57,43,.4);color:#c0392b;font-weight:700}
-.tp-ok{flex:1;padding:8px;border-radius:10px;border:none;background:#2E7D78;color:#fff;font-size:12px;font-family:'M PLUS Rounded 1c',sans-serif;cursor:pointer;font-weight:700}
+.tp-ok{padding:8px 20px;border-radius:10px;border:none;background:#2E7D78;color:#fff;font-size:12px;font-family:'M PLUS Rounded 1c',sans-serif;cursor:pointer;font-weight:700}
 </style>
 </head>
 <body>
@@ -283,19 +286,18 @@ body::before{
       <button class="nav-btn" id="prevDay">‹</button>
       <div class="date-center">
         <div class="date-display" id="dateDisplay">—</div>
-        <div class="date-label-wrap collapsible">
-          <div class="day-label" id="dayLabel">日程を追加してください</div>
-        </div>
       </div>
       <button class="nav-btn" id="nextDay">›</button>
-      <button class="hdr-add-btn" id="addBtn" title="タップ or ドラッグで追加">+</button>
-      <div class="hdr-trash" id="trash">×</div>
     </div>
     <div class="date-dots-wrap collapsible">
       <div class="date-dots" id="dateDots"></div>
     </div>
     <div class="add-day-wrap collapsible">
-      <button class="add-day-btn" id="addDayBtn">+ 日程を追加</button>
+      <div class="add-day-row">
+        <button class="add-day-btn" id="addDayBtn">＋ 日程を追加</button>
+        <button class="hdr-add-btn" id="addBtn" title="イベント追加">+</button>
+        <div class="hdr-trash" id="trash">×</div>
+      </div>
     </div>
   </div>
 
@@ -313,11 +315,21 @@ body::before{
   </div>
 </div>
 <div class="time-popup" id="timePopup">
-  <div class="tp-label">時刻を入力（HH:MM）</div>
-  <input class="tp-input" id="tpInput" type="text" placeholder="09:00" maxlength="5">
-  <div class="tp-btns">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
     <button class="tp-fix" id="tpFix">固定</button>
+    <span style="font-size:13px;font-weight:700;color:#888;font-family:'M PLUS Rounded 1c',sans-serif">時刻を選択</span>
     <button class="tp-ok" id="tpOk">OK</button>
+  </div>
+  <div style="display:flex;align-items:center;justify-content:center;gap:8px;position:relative">
+    <div style="position:relative;width:80px;height:160px;overflow:hidden">
+      <div class="tp-drum" id="tpHourDrum"></div>
+      <div class="tp-hl"></div>
+    </div>
+    <span style="font-size:24px;font-weight:700;color:#1a1a1a;margin-bottom:2px">:</span>
+    <div style="position:relative;width:80px;height:160px;overflow:hidden">
+      <div class="tp-drum" id="tpMinDrum"></div>
+      <div class="tp-hl"></div>
+    </div>
   </div>
 </div>
 
@@ -436,7 +448,14 @@ document.getElementById('nextDay').addEventListener('click',()=>goDay(curDay+1))
 document.getElementById('addDayBtn').addEventListener('click',()=>{
   const last=days[days.length-1];
   let newDate='';
-  if(last&&last.date){const parts=last.date.split('/');if(parts.length===2){const m=parseInt(parts[0]),d=parseInt(parts[1]);newDate=`${m}/${d+1}`;}}
+  if(last&&last.date){
+    const parts=last.date.split('/');
+    if(parts.length===2){
+      const year=new Date().getFullYear();
+      const dt=new Date(year,parseInt(parts[0])-1,parseInt(parts[1])+1);
+      newDate=`${dt.getMonth()+1}/${dt.getDate()}`;
+    }
+  }
   days.push({date:newDate,events:[]});
   curDay=days.length-1;
   renderHeader();renderTimeline();
@@ -445,18 +464,32 @@ document.getElementById('addDayBtn').addEventListener('click',()=>{
 function renderHeader(){
   const d=days[curDay];
   const disp=document.getElementById('dateDisplay');
-  const lbl=document.getElementById('dayLabel');
   const prev=document.getElementById('prevDay');
   const next=document.getElementById('nextDay');
-  if(!d){disp.textContent='—';lbl.textContent='日程を追加してください';}
+  if(!d){disp.textContent='—';}
   else{
     disp.innerHTML='';
+    // カレンダー選択式inputに変更
     const inp=document.createElement('input');
-    inp.value=d.date;inp.placeholder='日付';
-    inp.style.cssText='background:transparent;border:none;outline:none;text-align:center;font-family:"M PLUS Rounded 1c",sans-serif;font-size:17px;font-weight:700;color:#fff;width:130px';
-    inp.addEventListener('input',function(){days[curDay].date=this.value;renderDots();saveToFirestore();});
+    inp.type='date';
+    // 既存の日付文字列をdate型に変換（M/D → YYYY-MM-DD）
+    if(d.date&&d.date.includes('/')){
+      const parts=d.date.split('/');
+      const year=new Date().getFullYear();
+      inp.value=`${year}-${String(parts[0]).padStart(2,'0')}-${String(parts[1]).padStart(2,'0')}`;
+    } else if(d.date){
+      inp.value=d.date;
+    }
+    inp.style.cssText='background:transparent;border:none;outline:none;text-align:center;font-family:"M PLUS Rounded 1c",sans-serif;font-size:17px;font-weight:700;color:#fff;width:160px;color-scheme:dark;';
+    inp.addEventListener('change',function(){
+      // YYYY-MM-DD → M/D 形式で保存
+      if(this.value){
+        const [y,m,dd]=this.value.split('-');
+        days[curDay].date=`${parseInt(m)}/${parseInt(dd)}`;
+      }
+      renderDots();saveToFirestore();
+    });
     disp.appendChild(inp);
-    lbl.textContent=`${curDay+1}日目 / 全${days.length}日`;
   }
   prev.style.opacity=curDay<=0?.3:1;
   next.style.opacity=curDay>=days.length-1?.3:1;
@@ -636,38 +669,61 @@ function openDurPicker(idx,el){
 function durOut(e){if(!document.getElementById('durPicker').contains(e.target))closeDurPicker();}
 function closeDurPicker(){document.getElementById('durPicker').style.display='none';durPickerIdx=null;document.removeEventListener('click',durOut);}
 
+function buildDrum(drumEl, items, selectedVal) {
+  drumEl.innerHTML = '';
+  const padT = document.createElement('div'); padT.className = 'tp-drum-pad'; drumEl.appendChild(padT);
+  items.forEach(v => {
+    const d = document.createElement('div');
+    d.className = 'tp-drum-item' + (v === selectedVal ? ' sel' : '');
+    d.textContent = String(v).padStart(2, '0');
+    drumEl.appendChild(d);
+  });
+  const padB = document.createElement('div'); padB.className = 'tp-drum-pad'; drumEl.appendChild(padB);
+  const idx = items.indexOf(selectedVal);
+  if (idx >= 0) drumEl.scrollTop = idx * 40;
+}
+
+function getDrumValue(drumEl) {
+  const idx = Math.round(drumEl.scrollTop / 40);
+  const items = Array.from(drumEl.querySelectorAll('.tp-drum-item'));
+  return items[idx] ? parseInt(items[idx].textContent) : 0;
+}
+
+const HOURS = Array.from({length:24},(_,i)=>i);
+const MINS  = Array.from({length:12},(_,i)=>i*5); // 0,5,10,...,55
+
 function openTimePopup(idx,el){
   if(timePopupIdx===idx){closeTimePopup();return;}
   closeDurPicker();timePopupIdx=idx;
   const evs=getEvents(),times=computeTimes(evs);
-  const t=times[idx];tpFixed=!!evs[idx].fixedTime;
-  document.getElementById('tpInput').value=t!=null?fmtT(t):'';
+  const t=times[idx]??540; // デフォルト9:00
+  tpFixed=!!evs[idx].fixedTime;
+  const h=Math.floor(t/60)%24;
+  const m=Math.round((t%60)/5)*5%60;
+  buildDrum(document.getElementById('tpHourDrum'), HOURS, h);
+  buildDrum(document.getElementById('tpMinDrum'),  MINS,  m);
   document.getElementById('tpFix').className='tp-fix'+(tpFixed?' on':'');
   const p=document.getElementById('timePopup');
-  // スマホ対策：画面下部にシートとして表示（キーボードの上に出る）
   p.style.cssText='display:block;position:fixed;bottom:0;left:0;right:0;top:auto;width:100%;border-radius:20px 20px 0 0;box-shadow:0 -4px 24px rgba(0,0,0,.18);padding:20px 20px 36px;z-index:950;background:#fff;border:.5px solid #e0e0e0;';
-  setTimeout(()=>{
-    document.getElementById('tpInput').focus();
-    setTimeout(()=>document.addEventListener('click',timeOut),10);
-  },50);
+  setTimeout(()=>document.addEventListener('click',timeOut),10);
 }
 
 function applyTime(){
   if(timePopupIdx==null)return;
-  const evs=getEvents(),val=document.getElementById('tpInput').value.trim(),parsed=parseT(val);
-  if(parsed!=null){
-    if(tpFixed){evs[timePopupIdx].fixedTime=fmtT(parsed);}
-    else{
-      evs[timePopupIdx].fixedTime=null;
-      const times=computeTimes(evs);
-      if(timePopupIdx>0&&times[timePopupIdx-1]!=null){const nd=parsed-times[timePopupIdx-1];if(nd>=0)evs[timePopupIdx-1].dur=nd;}
-    }
+  const h=getDrumValue(document.getElementById('tpHourDrum'));
+  const m=getDrumValue(document.getElementById('tpMinDrum'));
+  const parsed=h*60+m;
+  const evs=getEvents();
+  if(tpFixed){evs[timePopupIdx].fixedTime=fmtT(parsed);}
+  else{
+    evs[timePopupIdx].fixedTime=null;
+    const times=computeTimes(evs);
+    if(timePopupIdx>0&&times[timePopupIdx-1]!=null){const nd=parsed-times[timePopupIdx-1];if(nd>=0)evs[timePopupIdx-1].dur=nd;}
   }
   closeTimePopup();renderTimeline();
 }
 document.getElementById('tpFix').addEventListener('click',function(){tpFixed=!tpFixed;this.className='tp-fix'+(tpFixed?' on':'');});
 document.getElementById('tpOk').addEventListener('click',applyTime);
-document.getElementById('tpInput').addEventListener('keydown',e=>{if(e.key==='Enter')applyTime();});
 function timeOut(e){if(!document.getElementById('timePopup').contains(e.target))closeTimePopup();}
 function closeTimePopup(){document.getElementById('timePopup').style.display='none';timePopupIdx=null;document.removeEventListener('click',timeOut);}
 
