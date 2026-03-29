@@ -254,12 +254,12 @@ body::before{
 .dur-btn:active{background:rgba(46,125,120,.22)}
 
 /* ── ピッカー ── */
-.dur-picker{position:fixed;z-index:900;background:#fff;border:.5px solid #e0e0e0;border-radius:16px;box-shadow:0 4px 20px rgba(0,0,0,.15);width:120px;overflow:hidden;display:none}
-.dur-inner{height:160px;overflow-y:scroll;scroll-snap-type:y mandatory;scrollbar-width:none}
+.dur-picker{position:fixed;z-index:900;background:#fff;border-top:.5px solid #e0e0e0;border-radius:20px 20px 0 0;box-shadow:0 -4px 24px rgba(0,0,0,.18);width:100%;left:0;right:0;bottom:0;overflow:hidden;display:none}
+.dur-inner{height:220px;overflow-y:scroll;scroll-snap-type:y mandatory;scrollbar-width:none}
 .dur-inner::-webkit-scrollbar{display:none}
 .dur-item{height:40px;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:500;scroll-snap-align:center;cursor:pointer;color:#1a1a1a;touch-action:manipulation;font-family:'M PLUS Rounded 1c',sans-serif}
 .dur-item.sel{color:#2E7D78}
-.dur-hl{position:absolute;left:0;right:0;top:60px;height:40px;border-top:1.5px solid #2E7D78;border-bottom:1.5px solid #2E7D78;pointer-events:none}
+.dur-hl{position:absolute;left:0;right:0;top:90px;height:40px;border-top:1.5px solid #2E7D78;border-bottom:1.5px solid #2E7D78;pointer-events:none}
 
 /* ── 時刻ポップアップ ── */
 .time-popup{position:fixed;z-index:950;background:#fff;border:.5px solid #e0e0e0;border-radius:20px 20px 0 0;box-shadow:0 -4px 24px rgba(0,0,0,.18);padding:20px 20px 36px;width:100%;display:none}
@@ -303,6 +303,10 @@ body::before{
 </div>
 
 <div class="dur-picker" id="durPicker">
+  <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px 8px;border-bottom:.5px solid #f0f0f0">
+    <span style="font-size:13px;font-weight:700;color:#888;font-family:'M PLUS Rounded 1c',sans-serif">所要時間</span>
+    <button onclick="document.getElementById('durPicker').style.display='none'" style="border:none;background:rgba(0,0,0,.06);border-radius:50%;width:26px;height:26px;font-size:14px;cursor:pointer;color:#666">×</button>
+  </div>
   <div style="position:relative">
     <div class="dur-inner" id="durInner"></div>
     <div class="dur-hl"></div>
@@ -624,11 +628,9 @@ function openDurPicker(idx,el){
     d.addEventListener('click',()=>{evs[idx].dur=v;closeDurPicker();renderTimeline();});
     inner.appendChild(d);
   });
-  const p=document.getElementById('durPicker');p.style.display='block';
-  const r=el.getBoundingClientRect();
-  p.style.top=(r.bottom+4+window.scrollY)+'px';
-  p.style.left=Math.max(4,Math.min(window.innerWidth-124,r.left+r.width/2-55))+'px';
-  const si=opts.indexOf(cur);if(si>=0)inner.scrollTop=si*40;
+  const p=document.getElementById('durPicker');
+  p.style.cssText='display:block;position:fixed;bottom:0;left:0;right:0;width:100%;border-radius:20px 20px 0 0;box-shadow:0 -4px 24px rgba(0,0,0,.18);z-index:900;background:#fff;border-top:.5px solid #e0e0e0;overflow:hidden;';
+  const si=opts.indexOf(cur);if(si>=0)inner.scrollTop=si*40-90;
   setTimeout(()=>document.addEventListener('click',durOut),10);
 }
 function durOut(e){if(!document.getElementById('durPicker').contains(e.target))closeDurPicker();}
