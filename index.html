@@ -368,18 +368,23 @@ function mkEvent(name,fixedTime,dur){return{id:nextId++,name,fixedTime,dur,check
 
 // Firestoreへの保存（500ms debounce）
 let saveTimer = null;
+let pendingSave = false; // 未送信の変更があるか
 function saveToFirestore() {
   if (isSyncing) return;
+  pendingSave = true;
   clearTimeout(saveTimer);
   saveTimer = setTimeout(async () => {
     try {
       await setDoc(doc(db, "trips", tripId), { days, tripName: document.getElementById('tripName').value });
     } catch(e) { console.error('save error', e); }
+    finally { pendingSave = false; }
   }, 500);
 }
 
 // Firestoreからリアルタイム受信
 onSnapshot(doc(db, "trips", tripId), (snap) => {
+  // ローカルに未送信の変更がある場合はFirestoreの受信をスキップ（上書き防止）
+  if (pendingSave) return;
   if (snap.exists()) {
     // 入力中（フォーカスがinputにある）はdaysの上書きも再描画もスキップ
     const focused = document.activeElement;
