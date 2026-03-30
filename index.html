@@ -8,7 +8,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<!-- v20260330-3 -->
+<!-- v20260330-4 -->
 <title>旅のしおり</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -725,34 +725,44 @@ function computeTimes(evs){
     }
   }
 
-  // ── Step3: 隣接アンカー時刻間の非ロック所要時間を余白から均等配分 ──
-  // Step1+2 で確定した「アンカー時刻」を両端として区間を走査する。
-  // 区間内の非ロック所要時間スロット（null でも値あり でも）に
-  // 「アンカー間スパン − ロック所要時間合計」を均等に割り当てる。
-  // これにより非ロック所要時間は常に両アンカーと整合した値になる。
+  // ── Step3: 隣接アンカー時刻間の所要時間を按分 ──
+  // ユーザーが設定した所要時間を優先し、未設定のスロットのみ自動配分。
+  // 合計が固定時刻間の時間を超える場合は警告を出す。
   for(let a=0;a<n-1;a++){
     if(times[a]==null) continue;
     for(let b=a+1;b<n;b++){
       if(times[b]==null) continue;
       const span=times[b]-times[a];
-      let lockedSum=0;
-      const freeIdx=[];
+      let setSum=0;      // 設定済み所要時間の合計
+      const freeIdx=[];  // 未設定のインデックス
+      
       for(let k=a;k<b;k++){
-        if(evs[k].durLocked&&durs[k]!=null) lockedSum+=durs[k];
-        else freeIdx.push(k);
-      }
-      if(freeIdx.length>0){
-        const remaining=span-lockedSum;
-        if(remaining<0){
-          // ロック所要時間の合計がスパンを超過 → 矛盾警告
-          for(let k=a;k<b;k++) if(evs[k].durLocked) warns[k]=true;
-          for(const k of freeIdx) durs[k]=0;
+        if(durs[k] != null){
+          // ユーザーが設定した値またはロックされた値を尊重
+          setSum += durs[k];
         } else {
-          // 余白を均等配分
-          const each=Math.max(0,Math.floor(remaining/freeIdx.length/STEP)*STEP);
-          for(const k of freeIdx) durs[k]=each;
+          // 未設定のスロット
+          freeIdx.push(k);
         }
       }
+      
+      const remaining = span - setSum;
+      
+      if(remaining < 0){
+        // 設定済み所要時間の合計が固定時刻間の時間を超過 → 警告
+        for(let k=a;k<b;k++){
+          if(durs[k] != null){
+            warns[k]=true;
+          }
+        }
+        // 未設定スロットは0にする
+        for(const k of freeIdx) durs[k]=0;
+      } else if(freeIdx.length > 0){
+        // 余白を未設定スロットに均等配分
+        const each=Math.max(0,Math.floor(remaining/freeIdx.length/STEP)*STEP);
+        for(const k of freeIdx) durs[k]=each;
+      }
+      
       a=b-1; break; // 次のアンカー区間へ
     }
   }
@@ -1719,16 +1729,12 @@ function renderTimelineInto(tl, evs, dayIdx){
       const isWarn=warns[i]===true;
       // 表示する所要時間: computeTimes が自動配分した値（アンカーと整合済み）
       const dispDur=durs[i]!=null?durs[i]:null;
-      // 施錠表示: 隣接固定時刻間 or ユーザーロック
-      const spanLocked=!!evs[i].fixedTime&&!!(evs[i+1]&&evs[i+1].fixedTime);
-      const showLock=spanLocked||evs[i].durLocked;
+      // 施錠表示: ユーザーが手動でロックした場合のみ
+      const showLock=evs[i].durLocked;
       btn.className='dur-btn'+(showLock?' locked':'')+(isWarn?' warn':'');
       btn.innerHTML=`<span style="font-size:10px;opacity:.7">▼</span>${showLock?'<span style="font-size:10px;margin-right:1px">🔒</span>':''}<span>${dispDur!=null?dispDur:'?'}分</span>${isWarn?'<span style="font-size:10px;margin-left:2px">⚠️</span>':''}`;
-      if(spanLocked){
-        btn.addEventListener('click',ev=>{ev.stopPropagation();showToast('🔒 2つの固定時刻の間の所要時間は自動計算されます');});
-      } else {
-        btn.addEventListener('click',ev=>{ev.stopPropagation();openDurPicker(i,btn);});
-      }
+      // 常に所要時間ピッカーを開けるようにする（固定時刻間でも編集可能）
+      btn.addEventListener('click',ev=>{ev.stopPropagation();openDurPicker(i,btn);});
 
       // ＋ボタン（長押し後出現、ドラッグして挿入）
       const addBtn=document.createElement('button');
