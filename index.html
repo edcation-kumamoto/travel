@@ -356,6 +356,32 @@ body::before{
 .dur-btn.warn{background:rgba(220,53,34,.1);border-color:rgba(220,53,34,.4);color:#dc3522;}
 .dur-btn.warn:active{background:rgba(220,53,34,.2)}
 
+/* ── ゴーストイベントカード（新規追加ドラッグ中） ── */
+.ghost-event{
+  position:fixed;
+  z-index:9999;
+  pointer-events:none;
+  width:160px;
+  height:36px;
+  background:rgba(255,255,255,.9);
+  border-radius:22px;
+  padding:0 14px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:6px;
+  opacity:.68;
+  box-shadow:0 6px 22px rgba(59,130,246,.45),0 2px 8px rgba(0,0,0,.14);
+  border:2px solid rgba(59,130,246,.72);
+  color:#3b82f6;
+  font-family:'M PLUS Rounded 1c',sans-serif;
+  font-size:12px;
+  font-weight:700;
+  white-space:nowrap;
+  transition:none;
+  will-change:left,top;
+}
+
 /* ── ピッカー ── */
 .dur-picker{position:fixed;z-index:900;background:#fff;border-top:.5px solid #e0e0e0;border-radius:20px 20px 0 0;box-shadow:0 -4px 24px rgba(0,0,0,.18);width:100%;left:0;right:0;bottom:0;overflow:hidden;display:none}
 .dur-inner{height:220px;overflow-y:scroll;scroll-snap-type:y mandatory;scrollbar-width:none;overscroll-behavior:contain;touch-action:pan-y}
@@ -923,6 +949,10 @@ window.addEventListener('scroll',()=>{
 /* ── ドラッグ&ドロップ ── */
 let touchDragData=null;
 let touchClone=null;
+// ゴーストカード（新規イベント追加ドラッグ用）
+let ghostEl=null;
+let ghostScrollTimer=null;
+const GHOST_EDGE=90; // エッジ自動スクロール発動距離(px)
 
 function exitJiggle(){
   document.querySelectorAll('.ev-wrap.jiggle').forEach(el=>{
@@ -972,54 +1002,57 @@ function setupDragDrop(){
     dz.addEventListener('drop',e=>{e.preventDefault();handleDrop(parseInt(dz.dataset.insert));});
   });
 
-  /* コネクター長押し → ＋ボタン出現 → タップまたはドラッグして挿入 */
+  /* コネクター長押し → ゴーストカード出現 → ドラッグして挿入 */
   document.querySelectorAll('.connector').forEach((conn,ci)=>{
-    let lpTimer=null;
+    let lpTimer=null,lpTouchId=null,lpTouchPos={x:0,y:0};
     const addBtn=conn.querySelector('.conn-add-btn');
     if(!addBtn) return;
     const ins=parseInt(addBtn.dataset.insertIdx);
 
-    // ── 長押し検知（タッチ）
+    // ── 長押し（タッチ）
     conn.addEventListener('touchstart',e=>{
       if(touchDragData)return;
       if(e.target.closest('.dur-btn,.conn-add-btn'))return;
+      const t=e.touches[0];
+      lpTouchId=t.identifier;
+      lpTouchPos={x:t.clientX,y:t.clientY};
       lpTimer=setTimeout(()=>{
         lpTimer=null;
-        hideAllAddBtns();
-        addBtn.classList.add('visible');
         if(navigator.vibrate)navigator.vibrate(40);
+        createGhostCard(lpTouchPos.x,lpTouchPos.y);
+        touchDragData={src:'new-add',insertIdx:ins,touchId:lpTouchId};
+        document.addEventListener('touchmove',onGhostMove,{passive:false});
       },800);
     },{passive:true});
-    conn.addEventListener('touchend',()=>{if(lpTimer){clearTimeout(lpTimer);lpTimer=null;}},{passive:true});
-    conn.addEventListener('touchcancel',()=>{if(lpTimer){clearTimeout(lpTimer);lpTimer=null;}},{passive:true});
-    conn.addEventListener('touchmove',()=>{if(lpTimer){clearTimeout(lpTimer);lpTimer=null;}},{passive:true});
 
-    // ── ＋ボタン：タッチドラッグ（non-passiveで確実にスクロール停止）
-    addBtn.addEventListener('touchstart',e=>{
-      e.stopPropagation();
-      const t=e.touches[0];
-      touchDragData={src:'new-add',insertIdx:ins,origBtn:addBtn,startX:t.clientX,startY:t.clientY};
-      // non-passiveリスナーを動的に追加してスクロールを止める
-      document.addEventListener('touchmove', onAddBtnMove, {passive:false});
+    function clearLP(){if(lpTimer){clearTimeout(lpTimer);lpTimer=null;}}
+    conn.addEventListener('touchend',clearLP,{passive:true});
+    conn.addEventListener('touchcancel',clearLP,{passive:true});
+    conn.addEventListener('touchmove',e=>{
+      // 少し動いたらキャンセル
+      if(lpTimer&&e.touches.length){
+        const t=e.touches[0];
+        const dx=t.clientX-lpTouchPos.x,dy=t.clientY-lpTouchPos.y;
+        if(Math.sqrt(dx*dx+dy*dy)>8)clearLP();
+      }
     },{passive:true});
 
-    // ── 長押し検知（デスクトップ）
+    // ── 長押し（デスクトップ）
+    let lpMousePos={x:0,y:0};
     conn.addEventListener('mousedown',e=>{
       if(touchDragData)return;
       if(e.target.closest('.dur-btn,.conn-add-btn'))return;
+      lpMousePos={x:e.clientX,y:e.clientY};
       lpTimer=setTimeout(()=>{
         lpTimer=null;
-        hideAllAddBtns();
-        addBtn.classList.add('visible');
+        createGhostCard(lpMousePos.x,lpMousePos.y);
+        touchDragData={src:'new-add',insertIdx:ins,touchId:-1};
+        document.addEventListener('mousemove',onGhostMouseMove);
+        document.addEventListener('mouseup',onGhostMouseUp);
       },800);
     });
-    conn.addEventListener('mouseup',()=>{if(lpTimer){clearTimeout(lpTimer);lpTimer=null;}});
-    conn.addEventListener('mouseleave',()=>{if(lpTimer){clearTimeout(lpTimer);lpTimer=null;}});
-
-    addBtn.addEventListener('mousedown',e=>{
-      e.stopPropagation();
-      touchDragData={src:'new-add',insertIdx:ins,origBtn:addBtn,startX:e.clientX,startY:e.clientY};
-    });
+    conn.addEventListener('mouseup',clearLP);
+    conn.addEventListener('mouseleave',clearLP);
   });
 
   /* ev-name 2秒長押し → 削除モード */
@@ -1046,25 +1079,92 @@ function setupDragDrop(){
   });
 }
 
-// ＋ボタンドラッグ専用 non-passiveハンドラ
-function onAddBtnMove(e){
-  if(!touchDragData || touchDragData.src!=='new-add'){
-    document.removeEventListener('touchmove',onAddBtnMove);
+// ── ゴーストカード（新規イベント追加） ──────────────────────
+
+function createGhostCard(x,y){
+  removeGhostCard();
+  ghostEl=document.createElement('div');
+  ghostEl.className='ghost-event';
+  ghostEl.innerHTML='<span style="font-size:14px">＋</span>新しいイベント';
+  document.body.appendChild(ghostEl);
+  _posGhost(x,y);
+}
+function _posGhost(x,y){
+  if(!ghostEl)return;
+  const W=ghostEl.offsetWidth||160,H=ghostEl.offsetHeight||36;
+  ghostEl.style.left=(x-W/2)+'px';
+  ghostEl.style.top =(y-H/2)+'px';
+}
+function removeGhostCard(){
+  if(ghostEl){ghostEl.remove();ghostEl=null;}
+  stopGhostScroll();
+}
+function startGhostScroll(speed){
+  stopGhostScroll();
+  ghostScrollTimer=setInterval(()=>window.scrollBy(0,speed),16);
+}
+function stopGhostScroll(){
+  if(ghostScrollTimer){clearInterval(ghostScrollTimer);ghostScrollTimer=null;}
+}
+
+// ゴースト touchmove ハンドラ（non-passive）
+function onGhostMove(e){
+  if(!touchDragData||touchDragData.src!=='new-add'){
+    document.removeEventListener('touchmove',onGhostMove);
     return;
   }
-  e.preventDefault(); // ← スクロールを止める（non-passiveだから効く）
+  // 2本指 → スクロール許可・ghostは動かさない
+  if(e.touches.length>=2){stopGhostScroll();return;}
+  e.preventDefault();
   const t=e.touches[0];
-  const btn=touchDragData.origBtn;
-  if(btn){
-    btn.style.position='fixed';
-    btn.style.left=(t.clientX-15)+'px';
-    btn.style.top=(t.clientY-15)+'px';
-    btn.style.zIndex='9999';
-    btn.style.pointerEvents='none';
+  _posGhost(t.clientX,t.clientY);
+
+  // エッジ自動スクロール
+  const vh=window.innerHeight;
+  if(t.clientY<GHOST_EDGE){
+    const rate=Math.ceil(3*(1-t.clientY/GHOST_EDGE));
+    startGhostScroll(-rate);
+  }else if(t.clientY>vh-GHOST_EDGE){
+    const rate=Math.ceil(3*((t.clientY-(vh-GHOST_EDGE))/GHOST_EDGE));
+    startGhostScroll(rate);
+  }else{
+    stopGhostScroll();
   }
+
+  // ドロップゾーンのハイライト
   cleanDZ();
+  if(ghostEl)ghostEl.style.visibility='hidden';
   const el=document.elementFromPoint(t.clientX,t.clientY);
+  if(ghostEl)ghostEl.style.visibility='';
   if(el){const dz=el.closest('.drop-zone');if(dz)dz.classList.add('over');}
+}
+
+// ゴースト mouseMove/Up（デスクトップ用）
+function onGhostMouseMove(e){
+  if(!touchDragData||touchDragData.src!=='new-add')return;
+  _posGhost(e.clientX,e.clientY);
+  cleanDZ();
+  if(ghostEl)ghostEl.style.visibility='hidden';
+  const el=document.elementFromPoint(e.clientX,e.clientY);
+  if(ghostEl)ghostEl.style.visibility='';
+  if(el){const dz=el.closest('.drop-zone');if(dz)dz.classList.add('over');}
+}
+function onGhostMouseUp(e){
+  document.removeEventListener('mousemove',onGhostMouseMove);
+  document.removeEventListener('mouseup',onGhostMouseUp);
+  if(!touchDragData||touchDragData.src!=='new-add')return;
+  if(ghostEl)ghostEl.style.visibility='hidden';
+  const el=document.elementFromPoint(e.clientX,e.clientY);
+  removeGhostCard();
+  let ins=null;
+  if(el){const dz=el.closest('.drop-zone');if(dz)ins=parseInt(dz.dataset.insert);}
+  cleanDZ();
+  touchDragData=null;
+  if(ins!==null){
+    days[curDay].events.splice(ins,0,mkEvent('新しいイベント',null,60));
+    renderTimeline();saveToFirestore();
+    setTimeout(()=>{const ns=document.querySelectorAll('.ev-name');if(ns[ins]){ns[ins].focus();ns[ins].select();}},50);
+  }
 }
 
 function createTouchClone(text,x,y,color){
@@ -1079,27 +1179,43 @@ function removeTouchClone(){if(touchClone){touchClone.remove();touchClone=null;}
 
 document.addEventListener('touchmove',e=>{
   if(!touchDragData)return;
-  if(touchDragData.src==='new-add') return; // onAddBtnMoveで処理済み
+  if(touchDragData.src==='new-add') return; // onGhostMoveで処理済み
   if(touchClone){touchClone.style.left=(e.touches[0].clientX-22)+'px';touchClone.style.top=(e.touches[0].clientY-22)+'px';}
   cleanDZ();
   const el=document.elementFromPoint(e.touches[0].clientX,e.touches[0].clientY);
   if(el){const dz=el.closest('.drop-zone');if(dz)dz.classList.add('over');}
 },{passive:true});
 
-document.addEventListener('touchend',e=>{
-  // ＋ボタンドラッグ終了
-  document.removeEventListener('touchmove',onAddBtnMove);
-  hideAllAddBtns();
-
+// タッチキャンセル時はゴーストを消す
+document.addEventListener('touchcancel',()=>{
   if(touchDragData?.src==='new-add'){
-    const btn=touchDragData.origBtn;
-    if(btn){btn.style.cssText='';}
-    const t=e.changedTouches[0];
-    const el=document.elementFromPoint(t.clientX,t.clientY);
+    document.removeEventListener('touchmove',onGhostMove);
+    stopGhostScroll();
+    removeGhostCard();
+    cleanDZ();
+    touchDragData=null;
+  }
+});
+
+document.addEventListener('touchend',e=>{
+  if(touchDragData?.src==='new-add'){
+    // ゴーストを動かしていた指が離れたか確認
+    const ghostEnded=Array.from(e.changedTouches).some(t=>t.identifier===touchDragData.touchId);
+    if(!ghostEnded) return; // 別の指が離れただけ → 継続
+
+    document.removeEventListener('touchmove',onGhostMove);
+    stopGhostScroll();
+
+    const pt=Array.from(e.changedTouches).find(t=>t.identifier===touchDragData.touchId)||e.changedTouches[0];
+    if(ghostEl) ghostEl.style.visibility='hidden';
+    const el=document.elementFromPoint(pt.clientX,pt.clientY);
+    removeGhostCard();
+
     let ins=null;
     if(el){const dz=el.closest('.drop-zone');if(dz)ins=parseInt(dz.dataset.insert);}
     cleanDZ();
     touchDragData=null;
+
     if(ins!==null){
       days[curDay].events.splice(ins,0,mkEvent('新しいイベント',null,60));
       renderTimeline();saveToFirestore();
@@ -1108,6 +1224,7 @@ document.addEventListener('touchend',e=>{
     return;
   }
 
+  // ── 通常ドラッグハンドル終了 ──
   if(!touchDragData){removeTouchClone();return;}
   removeTouchClone();
   const t=e.changedTouches[0];
