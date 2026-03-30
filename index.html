@@ -671,14 +671,21 @@ function computeTimes(evs){
     else if(cur!==null&&i>0){const d=evs[i-1].dur;if(d!=null&&!isNaN(d)){cur=cur+d;times[i]=cur;}else cur=null;}
   }
   // 後ろ→前方向に逆算
+  // ロック済み所要時間は前向き計算結果も強制上書き、未ロックはnullのみ埋めて止まる
+  const isFixed2=new Array(n).fill(false);
+  for(let k=0;k<n;k++) if(evs[k].fixedTime) isFixed2[k]=true;
   for(let i=n-1;i>=0;i--){
     if(times[i]!=null){
       let base=times[i];
       for(let j=i-1;j>=0;j--){
-        if(times[j]!=null) break;
+        if(isFixed2[j]) break;
         const dur=evs[j].dur;
-        if(dur!=null&&!isNaN(dur)){base=base-dur;times[j]=base;}
-        else break;
+        const dLocked=evs[j].durLocked;
+        if(dur!=null&&!isNaN(dur)){
+          base=base-dur;
+          if(times[j]==null||dLocked) times[j]=base;
+          if(!dLocked) break;
+        } else break;
       }
     }
   }
@@ -1618,7 +1625,10 @@ function renderTimelineInto(tl, evs, dayIdx){
     }
   });
 
-  tl.appendChild(makeDZ(evs.length));
+  const lastDZ=makeDZ(evs.length);
+  lastDZ.style.minHeight='64px';
+  lastDZ.style.margin='0 52px 4px';
+  tl.appendChild(lastDZ);
   if(isMainPane) setupDragDrop();
 }
 
