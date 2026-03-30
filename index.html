@@ -8,7 +8,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<!-- v20260330-2 -->
+<!-- v20260330-3 -->
 <title>旅のしおり</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -66,8 +66,7 @@ body::before{
   position:sticky;top:0;z-index:100;
   box-shadow:0 4px 20px rgba(20,80,76,.35),0 1px 0 rgba(255,255,255,.08) inset;
   overflow:hidden;
-  /* transitions for compact mode */
-  transition:padding .16s ease, border-radius .16s ease;
+  transition:padding .32s cubic-bezier(.4,0,.2,1), border-radius .32s cubic-bezier(.4,0,.2,1);
 }
 
 /* ── コンパクトモード（スクロール後） ── */
@@ -75,21 +74,29 @@ body::before{
 
 .collapsible{overflow:hidden;}
 
-/* trip-name: 高さは瞬時、opacityだけふわっとフェード */
+/* max-height でなめらかに展開・折りたたみ */
 .trip-name-row.collapsible{
-  height:38px;opacity:1;margin-bottom:10px;
-  transition:opacity .18s ease, margin .18s ease;
+  max-height:60px;opacity:1;margin-bottom:10px;
+  transition:max-height .32s cubic-bezier(.4,0,.2,1),
+             opacity .28s cubic-bezier(.4,0,.2,1),
+             margin .32s cubic-bezier(.4,0,.2,1);
 }
-.app-head.compact .trip-name-row.collapsible{height:0;opacity:0;margin-bottom:0;}
+.app-head.compact .trip-name-row.collapsible{max-height:0;opacity:0;margin-bottom:0;}
 
-.date-label-wrap.collapsible{height:24px;opacity:1;transition:opacity .14s ease;}
-.app-head.compact .date-label-wrap.collapsible{height:0;opacity:0;}
+.date-label-wrap.collapsible{
+  max-height:32px;opacity:1;
+  transition:max-height .28s cubic-bezier(.4,0,.2,1),
+             opacity .24s cubic-bezier(.4,0,.2,1);
+}
+.app-head.compact .date-label-wrap.collapsible{max-height:0;opacity:0;}
 
 .date-dots-wrap.collapsible{
-  height:22px;opacity:1;margin-top:8px;
-  transition:opacity .14s ease, margin .14s ease;
+  max-height:40px;opacity:1;margin-top:8px;
+  transition:max-height .28s cubic-bezier(.4,0,.2,1),
+             opacity .24s cubic-bezier(.4,0,.2,1),
+             margin .28s cubic-bezier(.4,0,.2,1);
 }
-.app-head.compact .date-dots-wrap.collapsible{height:0;opacity:0;margin-top:0;}
+.app-head.compact .date-dots-wrap.collapsible{max-height:0;opacity:0;margin-top:0;}
 
 /* 旅行名 */
 .trip-name-row{display:flex;align-items:center;justify-content:center}
@@ -936,22 +943,7 @@ window.addEventListener('scroll',()=>{
   const head = document.getElementById('appHead');
   const del  = document.getElementById('delDayBtn');
   const isCompact = window.scrollY > 28;
-  if(isCompact && !head.classList.contains('compact')){
-    // 縮む方向：アニメーションあり
-    head.classList.add('compact');
-  } else if(!isCompact && head.classList.contains('compact')){
-    // 広がる方向：一瞬で戻す（ガタつき防止）
-    // collapsibleのtransitionを一時無効化
-    head.querySelectorAll('.collapsible').forEach(el=>{
-      el.style.transition='none';
-    });
-    head.classList.remove('compact');
-    requestAnimationFrame(()=>{
-      head.querySelectorAll('.collapsible').forEach(el=>{
-        el.style.transition='';
-      });
-    });
-  }
+  head.classList.toggle('compact', isCompact);
   if(del) del.classList.toggle('hidden', isCompact);
 },{passive:true});
 
