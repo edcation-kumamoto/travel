@@ -285,7 +285,7 @@ body::before{
 
 /* ドロップゾーン */
 .drop-zone{height:4px;border-radius:4px;transition:all .15s;margin:0 52px}
-.drop-zone.over{height:30px;background:rgba(59,130,246,.15);margin:2px 52px;border-radius:10px;display:flex;align-items:center;justify-content:center;border:1.5px dashed rgba(59,130,246,.5)}
+.drop-zone.over{height:36px;background:rgba(59,130,246,.15);margin:2px 52px;border-radius:10px;display:flex;align-items:center;justify-content:center;border:1.5px dashed rgba(59,130,246,.5)}
 .drop-zone.over::after{content:'イベントを追加';font-size:11px;color:#3b82f6;font-weight:700;font-family:'M PLUS Rounded 1c',sans-serif}
 
 /* ── イベント ── */
@@ -1295,6 +1295,25 @@ function stopGhostScroll(){
   if(ghostScrollTimer){clearInterval(ghostScrollTimer);ghostScrollTimer=null;}
 }
 
+// ── ドロップゾーン近傍検出（感度改善） ──────────────────────
+// elementFromPoint の代わりに全ドロップゾーンのY座標との距離で判定する。
+// threshold: 指がドロップゾーン中心から何px以内なら反応するか
+const DZ_THRESHOLD = 52;
+function findNearestDropZone(x, y) {
+  const zones = document.querySelectorAll('.drop-zone');
+  let best = null, bestDist = DZ_THRESHOLD;
+  zones.forEach(dz => {
+    const r = dz.getBoundingClientRect();
+    const cy = (r.top + r.bottom) / 2;
+    // 横方向はゾーンの左右に余裕を持たせる
+    const inX = x >= r.left - 40 && x <= r.right + 40;
+    if (!inX) return;
+    const dist = Math.abs(cy - y);
+    if (dist < bestDist) { best = dz; bestDist = dist; }
+  });
+  return best;
+}
+
 // ゴースト touchmove ハンドラ（non-passive）
 function onGhostMove(e){
   if(!touchDragData||touchDragData.src!=='new-add'){
@@ -1319,12 +1338,10 @@ function onGhostMove(e){
     stopGhostScroll();
   }
 
-  // ドロップゾーンのハイライト
+  // ドロップゾーンのハイライト（近傍検出で感度向上）
   cleanDZ();
-  if(ghostEl)ghostEl.style.visibility='hidden';
-  const el=document.elementFromPoint(t.clientX,t.clientY);
-  if(ghostEl)ghostEl.style.visibility='';
-  if(el){const dz=el.closest('.drop-zone');if(dz)dz.classList.add('over');}
+  const dz=findNearestDropZone(t.clientX,t.clientY);
+  if(dz)dz.classList.add('over');
 }
 
 // ゴースト mouseMove/Up（デスクトップ用）
@@ -1332,20 +1349,17 @@ function onGhostMouseMove(e){
   if(!touchDragData||touchDragData.src!=='new-add')return;
   _posGhost(e.clientX,e.clientY);
   cleanDZ();
-  if(ghostEl)ghostEl.style.visibility='hidden';
-  const el=document.elementFromPoint(e.clientX,e.clientY);
-  if(ghostEl)ghostEl.style.visibility='';
-  if(el){const dz=el.closest('.drop-zone');if(dz)dz.classList.add('over');}
+  const dz=findNearestDropZone(e.clientX,e.clientY);
+  if(dz)dz.classList.add('over');
 }
 function onGhostMouseUp(e){
   document.removeEventListener('mousemove',onGhostMouseMove);
   document.removeEventListener('mouseup',onGhostMouseUp);
   if(!touchDragData||touchDragData.src!=='new-add')return;
-  if(ghostEl)ghostEl.style.visibility='hidden';
-  const el=document.elementFromPoint(e.clientX,e.clientY);
   removeGhostCard();
   let ins=null;
-  if(el){const dz=el.closest('.drop-zone');if(dz)ins=parseInt(dz.dataset.insert);}
+  const dz=findNearestDropZone(e.clientX,e.clientY);
+  if(dz)ins=parseInt(dz.dataset.insert);
   cleanDZ();
   touchDragData=null;
   if(ins!==null){
@@ -1395,12 +1409,11 @@ document.addEventListener('touchend',e=>{
     stopGhostScroll();
 
     const pt=Array.from(e.changedTouches).find(t=>t.identifier===touchDragData.touchId)||e.changedTouches[0];
-    if(ghostEl) ghostEl.style.visibility='hidden';
-    const el=document.elementFromPoint(pt.clientX,pt.clientY);
     removeGhostCard();
 
     let ins=null;
-    if(el){const dz=el.closest('.drop-zone');if(dz)ins=parseInt(dz.dataset.insert);}
+    const dz=findNearestDropZone(pt.clientX,pt.clientY);
+    if(dz)ins=parseInt(dz.dataset.insert);
     cleanDZ();
     touchDragData=null;
 
