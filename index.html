@@ -1055,6 +1055,59 @@ function setupDragDrop(){
     conn.addEventListener('mouseleave',clearLP);
   });
 
+  /* 背景（黄色エリア）長押し → ゴーストカード出現（イベントが1つ以下の時にも使える） */
+  {
+    const bg=document.getElementById('paneCur');
+    if(bg){
+      let bgLpTimer=null,bgTouchId=null,bgTouchPos={x:0,y:0};
+      const IGNORE='.ev-wrap,.connector,.drop-zone,.dur-btn,.ev-time,.ev-name,.drag-handle,.list-toggle,.ev-del-btn,.check-box,.check-text,.add-check-input,button,input';
+
+      bg.addEventListener('touchstart',e=>{
+        if(touchDragData)return;
+        if(e.target.closest(IGNORE))return;
+        const t=e.touches[0];
+        bgTouchId=t.identifier;
+        bgTouchPos={x:t.clientX,y:t.clientY};
+        bgLpTimer=setTimeout(()=>{
+          bgLpTimer=null;
+          if(navigator.vibrate)navigator.vibrate(40);
+          const ins=getEvents().length; // デフォルトは末尾、ドラッグ後にドロップゾーンで上書き
+          createGhostCard(bgTouchPos.x,bgTouchPos.y);
+          touchDragData={src:'new-add',insertIdx:ins,touchId:bgTouchId};
+          document.addEventListener('touchmove',onGhostMove,{passive:false});
+        },800);
+      },{passive:true});
+
+      function clearBgLP(){if(bgLpTimer){clearTimeout(bgLpTimer);bgLpTimer=null;}}
+      bg.addEventListener('touchend',clearBgLP,{passive:true});
+      bg.addEventListener('touchcancel',clearBgLP,{passive:true});
+      bg.addEventListener('touchmove',e=>{
+        if(bgLpTimer&&e.touches.length){
+          const t=e.touches[0];
+          const dx=t.clientX-bgTouchPos.x,dy=t.clientY-bgTouchPos.y;
+          if(Math.sqrt(dx*dx+dy*dy)>8)clearBgLP();
+        }
+      },{passive:true});
+
+      // デスクトップ
+      bg.addEventListener('mousedown',e=>{
+        if(touchDragData)return;
+        if(e.target.closest(IGNORE))return;
+        bgTouchPos={x:e.clientX,y:e.clientY};
+        bgLpTimer=setTimeout(()=>{
+          bgLpTimer=null;
+          const ins=getEvents().length;
+          createGhostCard(bgTouchPos.x,bgTouchPos.y);
+          touchDragData={src:'new-add',insertIdx:ins,touchId:-1};
+          document.addEventListener('mousemove',onGhostMouseMove);
+          document.addEventListener('mouseup',onGhostMouseUp);
+        },800);
+      });
+      bg.addEventListener('mouseup',clearBgLP);
+      bg.addEventListener('mouseleave',clearBgLP);
+    }
+  }
+
   /* ev-name 2秒長押し → 削除モード */
   document.querySelectorAll('.ev-name').forEach((nameIn,i)=>{
     let lpTimer=null;
