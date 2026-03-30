@@ -641,60 +641,103 @@ function getEvents(){return days[curDay]?days[curDay].events:[];}
 function parseT(s){if(!s||!s.includes(':'))return null;const[h,m]=s.split(':').map(Number);return isNaN(h)||isNaN(m)?null:h*60+m}
 function fmtT(m){if(m==null||isNaN(m))return'--:--';const h=Math.floor(m/60)%24,mm=m%60;return`${String(h).padStart(2,'0')}:${String(mm).padStart(2,'0')}`}
 
-// computeTimes: evs を変更しない。表示用所要時間 durs（null を自動按分）と times を返す。
+// computeTimes: evs を変更しない。
+// ─ 設計思想 ─────────────────────────────────────────────────────
+//   優先順位①: fixedTime（赤）= 絶対アンカー
+//   優先順位②: durLocked（🔒）= アンカーから双方向チェーン伝播で確定する時刻
+//   優先順位③: 非ロック所要時間 = 隣接アンカー間の「余白」を均等自動配分
+//   ※ ①②で矛盾が生じた場合 → warns[i]=true で警告表示
+// ─────────────────────────────────────────────────────────────────
 function computeTimes(evs){
   const n=evs.length;
   const times=new Array(n).fill(null);
-  const durs=evs.map(e=>e.dur); // 表示用コピー（evs は変更しない）
+  // 表示用所要時間コピー（evs は変更しない）
+  const durs=evs.map(e=>(e.dur!=null&&!isNaN(e.dur))?e.dur:null);
+  const warns=new Array(Math.max(0,n-1)).fill(false);
 
-  // Step1: 固定時刻を埋める
+  // ── Step1: 固定時刻をアンカーとして配置 ──
   for(let i=0;i<n;i++) if(evs[i].fixedTime) times[i]=parseT(evs[i].fixedTime);
 
-  // Step2: 2固定時刻間の null 所要時間を均等按分（既存の設定値は尊重）
-  for(let i=0;i<n-1;i++){
-    if(times[i]==null) continue;
-    for(let j=i+1;j<n;j++){
-      if(times[j]!=null){
-        const span=times[j]-times[i];
-        if(span>0){
-          const setSum=evs.slice(i,j).reduce((s,e)=>s+(e.dur!=null&&!isNaN(e.dur)?(e.dur||0):0),0);
-          const nullSlots=evs.slice(i,j).filter(e=>e.dur==null||isNaN(e.dur));
-          if(nullSlots.length>0){
-            const remaining=Math.max(0,span-setSum);
-            const each=Math.max(0,Math.floor(remaining/nullSlots.length/STEP)*STEP);
-            for(let k=i;k<j;k++){
-              if(durs[k]==null||isNaN(durs[k])) durs[k]=each;
-            }
-          }
-        }
-        break;
+  // ── Step2: ロック所要時間を通じて双方向チェーン伝播（繰り返し収束） ──
+  // 固定時刻から連続するロック所要時間チェーンで確定できる時刻を全て求める。
+  // 矛盾（2方向から異なる値が到達）は warns に記録。
+  let changed=true;
+  while(changed){
+    changed=false;
+    for(let i=0;i<n-1;i++){
+      if(!evs[i].durLocked||durs[i]==null||times[i]==null) continue;
+      const exp=times[i]+durs[i];
+      if(times[i+1]==null&&!evs[i+1]?.fixedTime){
+        times[i+1]=exp; changed=true;
+      } else if(times[i+1]!=null&&Math.abs(times[i+1]-exp)>0){
+        warns[i]=true; // ロック所要時間と確定済み時刻が矛盾
+      }
+    }
+    for(let i=n-2;i>=0;i--){
+      if(!evs[i].durLocked||durs[i]==null||times[i+1]==null) continue;
+      const exp=times[i+1]-durs[i];
+      if(times[i]==null&&!evs[i]?.fixedTime){
+        times[i]=exp; changed=true;
+      } else if(times[i]!=null&&Math.abs(times[i]-exp)>0){
+        warns[i]=true;
       }
     }
   }
 
-  // Step3: 前→後ろ方向に順算（次が固定の場合は上書きしない）
+  // ── Step3: 隣接アンカー時刻間の非ロック所要時間を余白から均等配分 ──
+  // Step1+2 で確定した「アンカー時刻」を両端として区間を走査する。
+  // 区間内の非ロック所要時間スロット（null でも値あり でも）に
+  // 「アンカー間スパン − ロック所要時間合計」を均等に割り当てる。
+  // これにより非ロック所要時間は常に両アンカーと整合した値になる。
+  for(let a=0;a<n-1;a++){
+    if(times[a]==null) continue;
+    for(let b=a+1;b<n;b++){
+      if(times[b]==null) continue;
+      const span=times[b]-times[a];
+      let lockedSum=0;
+      const freeIdx=[];
+      for(let k=a;k<b;k++){
+        if(evs[k].durLocked&&durs[k]!=null) lockedSum+=durs[k];
+        else freeIdx.push(k);
+      }
+      if(freeIdx.length>0){
+        const remaining=span-lockedSum;
+        if(remaining<0){
+          // ロック所要時間の合計がスパンを超過 → 矛盾警告
+          for(let k=a;k<b;k++) if(evs[k].durLocked) warns[k]=true;
+          for(const k of freeIdx) durs[k]=0;
+        } else {
+          // 余白を均等配分
+          const each=Math.max(0,Math.floor(remaining/freeIdx.length/STEP)*STEP);
+          for(const k of freeIdx) durs[k]=each;
+        }
+      }
+      a=b-1; break; // 次のアンカー区間へ
+    }
+  }
+
+  // ── Step4: アンカー外の null 時刻を前→後ろに伝播 ──
   for(let i=0;i<n-1;i++){
-    if(times[i]==null) continue;
-    if(evs[i+1]?.fixedTime) continue; // 次が固定 → スキップ
+    if(times[i]==null||times[i+1]!=null) continue;
+    if(evs[i+1]?.fixedTime) continue;
     const d=durs[i];
     if(d!=null&&!isNaN(d)) times[i+1]=times[i]+d;
   }
 
-  // Step4: 後ろ→前方向に逆算（固定時刻を越えない）
+  // ── Step5: 残りの null 時刻を後ろ→前に伝播 ──
   for(let i=n-1;i>=1;i--){
     if(times[i]==null) continue;
     let base=times[i];
     for(let j=i-1;j>=0;j--){
-      if(evs[j]?.fixedTime) break; // 固定時刻で止まる
+      if(evs[j]?.fixedTime||times[j]!=null) break;
       const d=durs[j];
       if(d==null||isNaN(d)) break;
       base-=d;
-      if(times[j]==null) times[j]=base;
-      else break; // 既に設定済み → 止まる
+      times[j]=base;
     }
   }
 
-  return {times,durs};
+  return {times,durs,warns};
 }
 
 function maxDurFor(idx,times,evs){
@@ -1315,8 +1358,8 @@ document.addEventListener('click',e=>{
 function openDurPicker(idx,el){
   if(durPickerIdx===idx){closeDurPicker();return;}
   closeTimePopup();durPickerIdx=idx;
-  const evs=getEvents(),{times}=computeTimes(evs);
-  const maxD=maxDurFor(idx,times,evs),cur=evs[idx].dur??0;
+  const evs=getEvents(),{times,durs}=computeTimes(evs);
+  const maxD=maxDurFor(idx,times,evs),cur=durs[idx]??evs[idx].dur??0;
   durLocked=!!evs[idx].durLocked;
   document.getElementById('durLock').className='dur-lock'+(durLocked?' on':'');
   document.getElementById('durLock').textContent=durLocked?'🔒 固定':'🔓 固定';
@@ -1509,7 +1552,7 @@ function renderTimelineInto(tl, evs, dayIdx){
     if(isMainPane) setupDragDrop();return;
   }
 
-  const {times,durs}=computeTimes(evs);
+  const {times,durs,warns}=computeTimes(evs);
   const allDurs=durs.slice(0,-1).map(d=>d??0);
   const maxDV=Math.max(...allDurs.filter(d=>d>0),60);
 
@@ -1592,31 +1635,13 @@ function renderTimelineInto(tl, evs, dayIdx){
       bc.appendChild(bar);cL.appendChild(bc);
       const cR=document.createElement('div');cR.className='conn-right';
       const btn=document.createElement('button');
-      // 隣接した2固定時刻の間かどうか（スパンロック）
+      // 警告判定: computeTimes の warns 配列を使用
+      const isWarn=warns[i]===true;
+      // 表示する所要時間: computeTimes が自動配分した値（アンカーと整合済み）
+      const dispDur=durs[i]!=null?durs[i]:null;
+      // 施錠表示: 隣接固定時刻間 or ユーザーロック
       const spanLocked=!!evs[i].fixedTime&&!!(evs[i+1]&&evs[i+1].fixedTime);
-      let requiredDur=null;
-      if(spanLocked){
-        const tA=parseT(evs[i].fixedTime),tB=parseT(evs[i+1].fixedTime);
-        if(tA!=null&&tB!=null) requiredDur=tB-tA;
-      }
-      // 警告判定：累積所要時間が次の固定時刻を超えていないか
-      let isWarn=false;
-      if(!spanLocked&&times[i]!=null){
-        for(let k=i+1;k<evs.length;k++){
-          if(evs[k].fixedTime){
-            const tf=parseT(evs[k].fixedTime);
-            if(tf!=null){
-              let sumD=0;
-              for(let m=i;m<k;m++) sumD+=(durs[m]??0);
-              if(times[i]+sumD>tf) isWarn=true;
-            }
-            break;
-          }
-        }
-      }
-      // 表示する所要時間と施錠状態
-      const dispDur=spanLocked&&requiredDur!=null?requiredDur:(e.dur!=null?e.dur:null);
-      const showLock=spanLocked||e.durLocked;
+      const showLock=spanLocked||evs[i].durLocked;
       btn.className='dur-btn'+(showLock?' locked':'')+(isWarn?' warn':'');
       btn.innerHTML=`<span style="font-size:10px;opacity:.7">▼</span>${showLock?'<span style="font-size:10px;margin-right:1px">🔒</span>':''}<span>${dispDur!=null?dispDur:'?'}分</span>${isWarn?'<span style="font-size:10px;margin-left:2px">⚠️</span>':''}`;
       if(spanLocked){
