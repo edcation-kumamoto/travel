@@ -8,7 +8,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<!-- v20260330-1 -->
+<!-- v20260330-2 -->
 <title>旅のしおり</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -634,28 +634,29 @@ function getEvents(){return days[curDay]?days[curDay].events:[];}
 function parseT(s){if(!s||!s.includes(':'))return null;const[h,m]=s.split(':').map(Number);return isNaN(h)||isNaN(m)?null:h*60+m}
 function fmtT(m){if(m==null||isNaN(m))return'--:--';const h=Math.floor(m/60)%24,mm=m%60;return`${String(h).padStart(2,'0')}:${String(mm).padStart(2,'0')}`}
 
+// computeTimes: evs を変更しない。表示用所要時間 durs（null を自動按分）と times を返す。
 function computeTimes(evs){
-  const n=evs.length,times=new Array(n).fill(null);
-  // まず固定時刻を埋める
-  for(let i=0;i<n;i++)if(evs[i].fixedTime)times[i]=parseT(evs[i].fixedTime);
+  const n=evs.length;
+  const times=new Array(n).fill(null);
+  const durs=evs.map(e=>e.dur); // 表示用コピー（evs は変更しない）
 
-  // 2つの固定時刻の間の所要時間を自動按分
+  // Step1: 固定時刻を埋める
+  for(let i=0;i<n;i++) if(evs[i].fixedTime) times[i]=parseT(evs[i].fixedTime);
+
+  // Step2: 2固定時刻間の null 所要時間を均等按分（既存の設定値は尊重）
   for(let i=0;i<n-1;i++){
     if(times[i]==null) continue;
-    // 次の固定時刻を探す
     for(let j=i+1;j<n;j++){
       if(times[j]!=null){
-        const span=times[j]-times[i]; // 区間の総時間
-        const between=j-i; // 区間内のイベント数
-        if(span>=0&&between>0){
-          // 区間内に所要時間未設定のものがあれば均等分割
-          const hasUnset=evs.slice(i,j).some(e=>!e.durLocked&&(e.dur==null||isNaN(e.dur)));
-          if(hasUnset){
-            const lockedDur=evs.slice(i,j).reduce((s,e)=>s+(e.durLocked?(e.dur||0):0),0);
-            const unlockedCount=evs.slice(i,j).filter(e=>!e.durLocked).length;
-            if(unlockedCount>0){
-              const each=Math.floor((span-lockedDur)/unlockedCount/STEP)*STEP;
-              for(let k=i;k<j;k++) if(!evs[k].durLocked) evs[k].dur=Math.max(0,each);
+        const span=times[j]-times[i];
+        if(span>0){
+          const setSum=evs.slice(i,j).reduce((s,e)=>s+(e.dur!=null&&!isNaN(e.dur)?(e.dur||0):0),0);
+          const nullSlots=evs.slice(i,j).filter(e=>e.dur==null||isNaN(e.dur));
+          if(nullSlots.length>0){
+            const remaining=Math.max(0,span-setSum);
+            const each=Math.max(0,Math.floor(remaining/nullSlots.length/STEP)*STEP);
+            for(let k=i;k<j;k++){
+              if(durs[k]==null||isNaN(durs[k])) durs[k]=each;
             }
           }
         }
@@ -664,39 +665,40 @@ function computeTimes(evs){
     }
   }
 
-  // 前→後ろ方向に順算
-  let cur=null;
-  for(let i=0;i<n;i++){
-    if(evs[i].fixedTime){cur=parseT(evs[i].fixedTime);times[i]=cur;}
-    else if(cur!==null&&i>0){const d=evs[i-1].dur;if(d!=null&&!isNaN(d)){cur=cur+d;times[i]=cur;}else cur=null;}
+  // Step3: 前→後ろ方向に順算（次が固定の場合は上書きしない）
+  for(let i=0;i<n-1;i++){
+    if(times[i]==null) continue;
+    if(evs[i+1]?.fixedTime) continue; // 次が固定 → スキップ
+    const d=durs[i];
+    if(d!=null&&!isNaN(d)) times[i+1]=times[i]+d;
   }
-  // 後ろ→前方向に逆算
-  // ロック済み所要時間は前向き計算結果も強制上書き、未ロックはnullのみ埋めて止まる
-  const isFixed2=new Array(n).fill(false);
-  for(let k=0;k<n;k++) if(evs[k].fixedTime) isFixed2[k]=true;
-  for(let i=n-1;i>=0;i--){
-    if(times[i]!=null){
-      let base=times[i];
-      for(let j=i-1;j>=0;j--){
-        if(isFixed2[j]) break;
-        const dur=evs[j].dur;
-        const dLocked=evs[j].durLocked;
-        if(dur!=null&&!isNaN(dur)){
-          base=base-dur;
-          if(times[j]==null||dLocked) times[j]=base;
-          if(!dLocked) break;
-        } else break;
-      }
+
+  // Step4: 後ろ→前方向に逆算（固定時刻を越えない）
+  for(let i=n-1;i>=1;i--){
+    if(times[i]==null) continue;
+    let base=times[i];
+    for(let j=i-1;j>=0;j--){
+      if(evs[j]?.fixedTime) break; // 固定時刻で止まる
+      const d=durs[j];
+      if(d==null||isNaN(d)) break;
+      base-=d;
+      if(times[j]==null) times[j]=base;
+      else break; // 既に設定済み → 止まる
     }
   }
-  return times;
+
+  return {times,durs};
 }
 
 function maxDurFor(idx,times,evs){
   for(let j=idx+1;j<evs.length;j++){
     if(evs[j].fixedTime){
       const a=parseT(evs[j].fixedTime);
-      if(a!=null&&times[idx]!=null){let o=0;for(let k=idx+1;k<j-1;k++)o+=(evs[k].dur||0);return Math.max(0,Math.floor((a-times[idx]-o)/STEP)*STEP);}
+      if(a!=null&&times[idx]!=null){
+        let o=0;
+        for(let k=idx+1;k<j;k++) o+=(evs[k].dur||0); // 修正: j-1まで含む
+        return Math.max(0,Math.floor((a-times[idx]-o)/STEP)*STEP);
+      }
     }
   }
   return MAX_DUR;
@@ -1321,7 +1323,7 @@ document.addEventListener('click',e=>{
 function openDurPicker(idx,el){
   if(durPickerIdx===idx){closeDurPicker();return;}
   closeTimePopup();durPickerIdx=idx;
-  const evs=getEvents(),times=computeTimes(evs);
+  const evs=getEvents(),{times}=computeTimes(evs);
   const maxD=maxDurFor(idx,times,evs),cur=evs[idx].dur??0;
   durLocked=!!evs[idx].durLocked;
   document.getElementById('durLock').className='dur-lock'+(durLocked?' on':'');
@@ -1387,7 +1389,7 @@ const MINS  = Array.from({length:12},(_,i)=>i*5); // 0,5,10,...,55
 function openTimePopup(idx,el){
   if(timePopupIdx===idx){closeTimePopup();return;}
   closeDurPicker();timePopupIdx=idx;
-  const evs=getEvents(),times=computeTimes(evs);
+  const evs=getEvents(),{times}=computeTimes(evs);
   const t=times[idx]??540; // デフォルト9:00
   tpFixed=!!evs[idx].fixedTime;
   const h=Math.floor(t/60)%24;
@@ -1411,7 +1413,7 @@ function applyTime(){
     evs[timePopupIdx].fixedTime=fmtT(parsed);
   } else {
     evs[timePopupIdx].fixedTime=null;
-    const times=computeTimes(evs);
+    const {times}=computeTimes(evs);
     if(timePopupIdx>0&&times[timePopupIdx-1]!=null){
       const nd=parsed-times[timePopupIdx-1];
       if(nd>=0) evs[timePopupIdx-1].dur=nd;
@@ -1515,8 +1517,8 @@ function renderTimelineInto(tl, evs, dayIdx){
     if(isMainPane) setupDragDrop();return;
   }
 
-  const times=computeTimes(evs);
-  const allDurs=evs.slice(0,-1).map(e=>e.dur??0);
+  const {times,durs}=computeTimes(evs);
+  const allDurs=durs.slice(0,-1).map(d=>d??0);
   const maxDV=Math.max(...allDurs.filter(d=>d>0),60);
 
   function makeDZ(ins){const dz=document.createElement('div');dz.className='drop-zone';dz.dataset.insert=ins;return dz;}
@@ -1589,7 +1591,7 @@ function renderTimelineInto(tl, evs, dayIdx){
     if(isMainPane) renderChecklist(evs,i,paneId);
 
     if(!isLast){
-      const dur=e.dur??0;
+      const dur=durs[i]??0;
       const barH=Math.max(20,Math.round((dur/maxDV)*80));
       const conn=document.createElement('div');conn.className='connector';conn.style.minHeight=(barH+28)+'px';
       const cL=document.createElement('div');cL.className='conn-left';
@@ -1598,22 +1600,38 @@ function renderTimelineInto(tl, evs, dayIdx){
       bc.appendChild(bar);cL.appendChild(bc);
       const cR=document.createElement('div');cR.className='conn-right';
       const btn=document.createElement('button');
-      // 警告判定：次の固定時刻との間で所要時間がオーバーしているか
+      // 隣接した2固定時刻の間かどうか（スパンロック）
+      const spanLocked=!!evs[i].fixedTime&&!!(evs[i+1]&&evs[i+1].fixedTime);
+      let requiredDur=null;
+      if(spanLocked){
+        const tA=parseT(evs[i].fixedTime),tB=parseT(evs[i+1].fixedTime);
+        if(tA!=null&&tB!=null) requiredDur=tB-tA;
+      }
+      // 警告判定：累積所要時間が次の固定時刻を超えていないか
       let isWarn=false;
-      if(times[i]!=null&&evs[i+1]&&evs[i+1].fixedTime){
-        const nextFixed=parseT(evs[i+1].fixedTime);
-        if(nextFixed!=null&&times[i]+dur>nextFixed) isWarn=true;
-      } else if(times[i]!=null&&times[i+1]!=null&&evs[i+1].fixedTime){
-        if(times[i]+dur>times[i+1]) isWarn=true;
+      if(!spanLocked&&times[i]!=null){
+        for(let k=i+1;k<evs.length;k++){
+          if(evs[k].fixedTime){
+            const tf=parseT(evs[k].fixedTime);
+            if(tf!=null){
+              let sumD=0;
+              for(let m=i;m<k;m++) sumD+=(durs[m]??0);
+              if(times[i]+sumD>tf) isWarn=true;
+            }
+            break;
+          }
+        }
       }
-      // 固定時刻間で按分計算と実際の所要時間がずれている場合も警告
-      if(!isWarn&&times[i]!=null&&times[i+1]!=null){
-        const expected=times[i+1]-times[i];
-        if(dur>expected+1) isWarn=true;
+      // 表示する所要時間と施錠状態
+      const dispDur=spanLocked&&requiredDur!=null?requiredDur:(e.dur!=null?e.dur:null);
+      const showLock=spanLocked||e.durLocked;
+      btn.className='dur-btn'+(showLock?' locked':'')+(isWarn?' warn':'');
+      btn.innerHTML=`<span style="font-size:10px;opacity:.7">▼</span>${showLock?'<span style="font-size:10px;margin-right:1px">🔒</span>':''}<span>${dispDur!=null?dispDur:'?'}分</span>${isWarn?'<span style="font-size:10px;margin-left:2px">⚠️</span>':''}`;
+      if(spanLocked){
+        btn.addEventListener('click',ev=>{ev.stopPropagation();showToast('🔒 2つの固定時刻の間の所要時間は自動計算されます');});
+      } else {
+        btn.addEventListener('click',ev=>{ev.stopPropagation();openDurPicker(i,btn);});
       }
-      btn.className='dur-btn'+(e.durLocked?' locked':'')+(isWarn?' warn':'');
-      btn.innerHTML=`<span style="font-size:10px;opacity:.7">▼</span>${e.durLocked?'<span style="font-size:10px;margin-right:1px">🔒</span>':''}<span>${e.dur!=null?e.dur:'?'}分</span>${isWarn?'<span style="font-size:10px;margin-left:2px">⚠️</span>':''}`;
-      btn.addEventListener('click',ev=>{ev.stopPropagation();openDurPicker(i,btn);});
 
       // ＋ボタン（長押し後出現、ドラッグして挿入）
       const addBtn=document.createElement('button');
