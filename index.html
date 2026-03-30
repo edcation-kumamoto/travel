@@ -8,7 +8,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<!-- v20260330-4 -->
+<!-- v20260330-5 -->
 <title>旅のしおり</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -737,11 +737,11 @@ function computeTimes(evs){
       const freeIdx=[];  // 未設定のインデックス
       
       for(let k=a;k<b;k++){
-        if(durs[k] != null){
-          // ユーザーが設定した値またはロックされた値を尊重
+        if(evs[k].durLocked && durs[k]!=null){
+          // 🔒ロックされた所要時間のみ固定（合計に加算）
           setSum += durs[k];
         } else {
-          // 未設定のスロット
+          // ロックされていないスロットは自動配分の対象（既存のdur値があっても上書き可）
           freeIdx.push(k);
         }
       }
@@ -749,16 +749,16 @@ function computeTimes(evs){
       const remaining = span - setSum;
       
       if(remaining < 0){
-        // 設定済み所要時間の合計が固定時刻間の時間を超過 → 警告
+        // ロック所要時間の合計が固定時刻間の時間を超過 → 警告
         for(let k=a;k<b;k++){
-          if(durs[k] != null){
+          if(evs[k].durLocked && durs[k]!=null){
             warns[k]=true;
           }
         }
-        // 未設定スロットは0にする
+        // 自動配分スロットは0にする
         for(const k of freeIdx) durs[k]=0;
       } else if(freeIdx.length > 0){
-        // 余白を未設定スロットに均等配分
+        // 余白を自動配分スロットに均等配分
         const each=Math.max(0,Math.floor(remaining/freeIdx.length/STEP)*STEP);
         for(const k of freeIdx) durs[k]=each;
       }
@@ -791,13 +791,14 @@ function computeTimes(evs){
   return {times,durs,warns};
 }
 
-function maxDurFor(idx,times,evs){
+function maxDurFor(idx,times,durs,evs){
   for(let j=idx+1;j<evs.length;j++){
     if(evs[j].fixedTime){
       const a=parseT(evs[j].fixedTime);
       if(a!=null&&times[idx]!=null){
         let o=0;
-        for(let k=idx+1;k<j;k++) o+=(evs[k].dur||0); // 修正: j-1まで含む
+        // evs[k].durでなくcomputeTimesで解決済みのdurs[k]を使う
+        for(let k=idx+1;k<j;k++) o+=(durs[k]||0);
         return Math.max(0,Math.floor((a-times[idx]-o)/STEP)*STEP);
       }
     }
@@ -1449,7 +1450,7 @@ function openDurPicker(idx,el){
   if(durPickerIdx===idx){closeDurPicker();return;}
   closeTimePopup();durPickerIdx=idx;
   const evs=getEvents(),{times,durs}=computeTimes(evs);
-  const maxD=maxDurFor(idx,times,evs),cur=durs[idx]??evs[idx].dur??0;
+  const maxD=maxDurFor(idx,times,durs,evs),cur=durs[idx]??evs[idx].dur??0;
   durLocked=!!evs[idx].durLocked;
   document.getElementById('durLock').className='dur-lock'+(durLocked?' on':'');
   document.getElementById('durLock').textContent=durLocked?'🔒 固定':'🔓 固定';
