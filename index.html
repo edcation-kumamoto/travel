@@ -197,19 +197,50 @@ body::before{
   touch-action:manipulation;
 }
 .add-day-btn:active{background:rgba(255,255,255,.1)}
-.del-day-btn{
-  position:fixed;top:10px;right:10px;z-index:300;
-  background:rgba(192,57,43,.15);
-  border:1px solid rgba(192,57,43,.35);
-  border-radius:16px;padding:5px 12px;
-  font-size:11px;font-weight:700;color:rgba(200,80,60,.9);
-  cursor:pointer;font-family:'M PLUS Rounded 1c',sans-serif;
-  touch-action:manipulation;white-space:nowrap;
-  opacity:1;pointer-events:auto;
+
   transition:opacity .25s ease;
 }
 .del-day-btn.hidden{opacity:0;pointer-events:none}
 .del-day-btn:active{background:rgba(192,57,43,.28)}
+
+/* 日程削除確認ポップアップ */
+.del-day-popup{
+  position:fixed;top:0;left:0;right:0;bottom:0;
+  background:rgba(0,0,0,.5);
+  display:none;align-items:center;justify-content:center;
+  z-index:400;
+}
+.del-day-popup.show{display:flex}
+.del-day-popup-content{
+  background:#fff;border-radius:20px;
+  padding:24px;width:80%;max-width:320px;
+  box-shadow:0 10px 40px rgba(0,0,0,.3);
+}
+.del-day-popup-title{
+  font-size:16px;font-weight:700;
+  color:#333;margin-bottom:16px;
+  text-align:center;font-family:'M PLUS Rounded 1c',sans-serif;
+}
+.del-day-popup-buttons{
+  display:flex;gap:10px;
+}
+.del-day-popup-btn{
+  flex:1;padding:12px;border:none;
+  border-radius:12px;font-size:14px;
+  font-weight:700;cursor:pointer;
+  font-family:'M PLUS Rounded 1c',sans-serif;
+  touch-action:manipulation;
+}
+.del-day-popup-btn.cancel{
+  background:#e0e0e0;color:#666;
+}
+.del-day-popup-btn.delete{
+  background:#ff3b30;color:#fff;
+}
+.del-day-popup-btn:active{
+  opacity:.7;transform:scale(.96);
+}
+
 
 /* スワイプヒント */
 .swipe-create-hint{
@@ -447,7 +478,17 @@ body::before{
     </div>
   </div>
 </div>
-<button class="del-day-btn" id="delDayBtn">日程削除</button>
+
+<!-- 日程削除確認ポップアップ -->
+<div class="del-day-popup" id="delDayPopup">
+  <div class="del-day-popup-content">
+    <div class="del-day-popup-title">この日程を削除しますか？</div>
+    <div class="del-day-popup-buttons">
+      <button class="del-day-popup-btn cancel" id="delDayCancel">いいえ</button>
+      <button class="del-day-popup-btn delete" id="delDayConfirm">削除</button>
+    </div>
+  </div>
+</div>
 
 <div class="dur-picker" id="durPicker">
   <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px 8px;border-bottom:.5px solid #f0f0f0">
@@ -922,7 +963,18 @@ function addDay(){
   });
 })();
 
-document.getElementById('delDayBtn').addEventListener('click',()=>{
+// 日程削除確認ポップアップの処理
+function showDelDayPopup() {
+  const popup = document.getElementById('delDayPopup');
+  if (popup) popup.classList.add('show');
+}
+
+function hideDelDayPopup() {
+  const popup = document.getElementById('delDayPopup');
+  if (popup) popup.classList.remove('show');
+}
+
+function deleteCurDay() {
   if(days.length<=1){
     // 最後の1日は削除させない
     const hint=document.createElement('div');
@@ -931,11 +983,17 @@ document.getElementById('delDayBtn').addEventListener('click',()=>{
     document.body.appendChild(hint);setTimeout(()=>hint.remove(),2500);
     return;
   }
-  if(!confirm(`${days[curDay].date||'この日程'}を削除しますか？`))return;
   days.splice(curDay,1);
   curDay=Math.min(curDay,days.length-1);
   renderHeader();renderTimeline();saveToFirestore();
+}
+
+document.getElementById('delDayCancel').addEventListener('click', hideDelDayPopup);
+document.getElementById('delDayConfirm').addEventListener('click', () => {
+  hideDelDayPopup();
+  deleteCurDay();
 });
+
 
 function renderHeader(){
   const d=days[curDay];
@@ -965,6 +1023,29 @@ function renderHeader(){
       }
       renderDots();saveToFirestore();
     });
+    
+    // 日付部分の長押しで削除確認ポップアップを表示
+    let longPressTimer = null;
+    const handleLongPressStart = (e) => {
+      longPressTimer = setTimeout(() => {
+        showDelDayPopup();
+        if (navigator.vibrate) navigator.vibrate(50);
+      }, 2000);
+    };
+    const handleLongPressEnd = () => {
+      if (longPressTimer) {
+        clearTimeout(longPressTimer);
+        longPressTimer = null;
+      }
+    };
+    
+    inp.addEventListener('touchstart', handleLongPressStart, {passive: true});
+    inp.addEventListener('touchend', handleLongPressEnd);
+    inp.addEventListener('touchcancel', handleLongPressEnd);
+    inp.addEventListener('mousedown', handleLongPressStart);
+    inp.addEventListener('mouseup', handleLongPressEnd);
+    inp.addEventListener('mouseleave', handleLongPressEnd);
+    
     disp.appendChild(inp);
   }
   prev.style.opacity=curDay<=0?.3:1;
@@ -982,13 +1063,12 @@ function renderDots(){
   });
 }
 
-window.addEventListener('scroll',()=>{
+// ヘッダーを常に折りたたまれた状態に設定
+document.addEventListener('DOMContentLoaded', () => {
   const head = document.getElementById('appHead');
-  const del  = document.getElementById('delDayBtn');
-  const isCompact = window.scrollY > 28;
-  head.classList.toggle('compact', isCompact);
-  if(del) del.classList.toggle('hidden', isCompact);
-},{passive:true});
+  if (head) head.classList.add('compact');
+});
+
 
 /* ── ドラッグ&ドロップ ── */
 let touchDragData=null;
