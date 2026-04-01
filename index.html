@@ -879,8 +879,8 @@ function addDay(){
   document.addEventListener('touchstart',e=>{
     if(document.getElementById('durPicker').style.display==='block') return;
     if(document.getElementById('timePopup').style.display==='block') return;
-    // ＋ボタンドラッグ中はスワイプしない
-    if(touchDragData?.src==='new-add') return;
+    // ドラッグ中はスワイプしない（通常ドラッグ・新規追加ドラッグ両方）
+    if(touchDragData) return;
     // input要素上は無視
     if(e.target.closest('input,button,.drag-handle,.dur-btn,.ev-time,.list-toggle,.check-box,.ev-del-btn')) return;
     swX=e.touches[0].clientX;
@@ -890,7 +890,7 @@ function addDay(){
   },{passive:true});
 
   document.addEventListener('touchmove',e=>{
-    if(swX===null||touchDragData?.src==='new-add') return;
+    if(swX===null||touchDragData) return;
     const dx=e.touches[0].clientX-swX;
     const dy=e.touches[0].clientY-swY;
     if(swLocked===null){
@@ -928,7 +928,7 @@ function addDay(){
   document.addEventListener('touchend',e=>{
     document.getElementById('slideViewport').style.touchAction='pan-y';
     const ov=getOverlay(); if(ov) ov.style.opacity='0';
-    if(!swActive||swLocked!=='x'||touchDragData?.src==='new-add'){ swX=null;swY=null;swLocked=null;swActive=false; return; }
+    if(!swActive||swLocked!=='x'||touchDragData){ swX=null;swY=null;swLocked=null;swActive=false; return; }
     const dx=e.changedTouches[0].clientX-swX;
     const W=getSlideW();
     const ratio=Math.abs(dx)/W;
@@ -1103,20 +1103,26 @@ function hideAllAddBtns(){
 function setupDragDrop(){
   /* ── イベントカード：長押し削除 & デスクトップドラッグ ── */
   document.querySelectorAll('.ev-wrap').forEach((el,i)=>{
-    // デスクトップ drag
-    el.draggable=true;
-    el.addEventListener('dragstart',e=>{
-      if(e.target.closest('.ev-name,.list-toggle,.check-box,.check-text,.add-check-input,.ev-time,.dur-btn,.ev-del-btn'))return e.preventDefault();
-      exitJiggle();
-      dragSrc=i;e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('text/plain',String(i));
-      setTimeout(()=>el.classList.add('dragging'),0);
-    });
-    el.addEventListener('dragend',()=>{el.classList.remove('dragging');dragSrc=null;cleanDZ();});
-
     // タップで jiggle 解除
     el.addEventListener('click',ev=>{
       if(el.classList.contains('jiggle')){ev.stopPropagation();return;}
     });
+  });
+
+  /* デスクトップ drag はdrag-handle要素のみで行う */
+  document.querySelectorAll('.drag-handle').forEach((handle,i)=>{
+    const el=handle.closest('.ev-wrap');
+    if(el){
+      el.draggable=true;
+      el.addEventListener('dragstart',e=>{
+        if(e.target.closest('.ev-name,.list-toggle,.check-box,.check-text,.add-check-input,.ev-time,.dur-btn,.ev-del-btn'))return e.preventDefault();
+        if(!e.target.closest('.drag-handle'))return e.preventDefault(); // ハンドル以外はドラッグ禁止
+        exitJiggle();
+        dragSrc=i;e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('text/plain',String(i));
+        setTimeout(()=>el.classList.add('dragging'),0);
+      });
+      el.addEventListener('dragend',()=>{el.classList.remove('dragging');dragSrc=null;cleanDZ();});
+    }
   });
 
   /* ドラッグハンドル：タッチ並び替え */
@@ -1125,7 +1131,7 @@ function setupDragDrop(){
       exitJiggle();
       e.stopPropagation();
       const t=e.touches[0];
-      touchDragData={src:i,startX:t.clientX,startY:t.clientY};
+      touchDragData={src:i,startX:t.clientX,startY:t.clientY,touchId:t.identifier};
       createTouchClone('⠿',t.clientX,t.clientY,'#2E7D78');
     },{passive:true});
   });
@@ -1427,8 +1433,17 @@ document.addEventListener('touchend',e=>{
 
   // ── 通常ドラッグハンドル終了 ──
   if(!touchDragData){removeTouchClone();return;}
+
+  // ドラッグを開始した指だけ処理（別の指のtouchendは無視）
+  if(touchDragData.touchId!=null){
+    const dragEnded=Array.from(e.changedTouches).some(t=>t.identifier===touchDragData.touchId);
+    if(!dragEnded)return;
+  }
   removeTouchClone();
-  const t=e.changedTouches[0];
+  // ドラッグ開始した指のtouchを取得
+  const t=(touchDragData.touchId!=null
+    ? Array.from(e.changedTouches).find(t=>t.identifier===touchDragData.touchId)
+    : null) || e.changedTouches[0];
   const el=document.elementFromPoint(t.clientX,t.clientY);
   if(el){
     const dz=el.closest('.drop-zone');
@@ -1441,7 +1456,7 @@ document.addEventListener('touchend',e=>{
 function handleDrop(ins,src){
   const s=src!==undefined?src:dragSrc;
   const evs=getEvents();
-  if(typeof s==='number'&&s!==ins&&s!==ins-1){
+  if(typeof s==='number'&&s>=0&&s<evs.length&&s!==ins&&s!==ins-1){
     const moved=evs.splice(s,1)[0];
     const ni=ins>s?ins-1:ins;
     evs.splice(ni,0,moved);
@@ -1663,6 +1678,7 @@ function renderTimelineInto(tl, evs, dayIdx){
   function makeDZ(ins){const dz=document.createElement('div');dz.className='drop-zone';dz.dataset.insert=ins;return dz;}
 
   evs.forEach((e,i)=>{
+    if(!e||typeof e!=='object') return; // null/undefinedイベントをスキップ
     const isLast=i===evs.length-1;
     const tStr=fmtT(times[i]);
     const isFixed=!!e.fixedTime;
