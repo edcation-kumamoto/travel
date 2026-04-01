@@ -1101,16 +1101,18 @@ function hideAllAddBtns(){
 }
 
 function setupDragDrop(){
-  /* ── イベントカード：長押し削除 & デスクトップドラッグ ── */
+  /* ── イベントカード：タップで jiggle 解除 ── */
   document.querySelectorAll('.ev-wrap').forEach((el,i)=>{
-    // タップで jiggle 解除
     el.addEventListener('click',ev=>{
       if(el.classList.contains('jiggle')){ev.stopPropagation();return;}
     });
   });
 
+  // メインペインのみを対象にする（隣接ペインのハンドルを混入させない）
+  const mainTL=document.getElementById('timelineArea');
+
   /* デスクトップ drag はdrag-handle要素のみで行う */
-  document.querySelectorAll('.drag-handle').forEach((handle,i)=>{
+  mainTL.querySelectorAll('.drag-handle').forEach((handle,i)=>{
     const el=handle.closest('.ev-wrap');
     if(el){
       el.draggable=true;
@@ -1126,7 +1128,7 @@ function setupDragDrop(){
   });
 
   /* ドラッグハンドル：タッチ並び替え（長押しで浮かせてから移動） */
-  document.querySelectorAll('.drag-handle').forEach((handle,i)=>{
+  mainTL.querySelectorAll('.drag-handle').forEach((handle,i)=>{
     let lpTimer=null,lpTouchId=null,lpStartPos={x:0,y:0};
 
     // 長押し開始でドラッグをアクティブにする専用touchmoveハンドラ（non-passive）
@@ -1184,7 +1186,7 @@ function setupDragDrop(){
   });
 
   /* ドロップゾーン（デスクトップ）*/
-  document.querySelectorAll('.drop-zone').forEach(dz=>{
+  mainTL.querySelectorAll('.drop-zone').forEach(dz=>{
     dz.addEventListener('dragover',e=>{e.preventDefault();e.dataTransfer.dropEffect='move';cleanDZ();dz.classList.add('over');});
     dz.addEventListener('dragleave',()=>dz.classList.remove('over'));
     dz.addEventListener('drop',e=>{e.preventDefault();handleDrop(parseInt(dz.dataset.insert));});
@@ -1363,7 +1365,8 @@ function stopGhostScroll(){
 // threshold: 指がドロップゾーン中心から何px以内なら反応するか
 const DZ_THRESHOLD = 52;
 function findNearestDropZone(x, y) {
-  const zones = document.querySelectorAll('.drop-zone');
+  const mainTL=document.getElementById('timelineArea');
+  const zones = mainTL ? mainTL.querySelectorAll('.drop-zone') : document.querySelectorAll('.drop-zone');
   let best = null, bestDist = DZ_THRESHOLD;
   zones.forEach(dz => {
     const r = dz.getBoundingClientRect();
