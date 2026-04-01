@@ -290,7 +290,7 @@ body::before{
 
 /* ── イベント ── */
 .ev-wrap{position:relative}
-.ev-wrap.dragging{opacity:.32}
+.ev-wrap.dragging{opacity:.3;transform:scale(.97);transition:opacity .1s,transform .1s;}
 .ev-row{display:flex;align-items:flex-start}
 .ev-left{width:68px;flex-shrink:0;display:flex;flex-direction:column;align-items:flex-end;padding-right:8px;padding-top:8px}
 .ev-time{
@@ -1125,14 +1125,61 @@ function setupDragDrop(){
     }
   });
 
-  /* ドラッグハンドル：タッチ並び替え */
+  /* ドラッグハンドル：タッチ並び替え（長押しで浮かせてから移動） */
   document.querySelectorAll('.drag-handle').forEach((handle,i)=>{
-    handle.addEventListener('touchstart',e=>{
-      exitJiggle();
-      e.stopPropagation();
+    let lpTimer=null,lpTouchId=null,lpStartPos={x:0,y:0};
+
+    // 長押し開始でドラッグをアクティブにする専用touchmoveハンドラ（non-passive）
+    function onDragHandleMove(e){
+      if(!touchDragData||touchDragData.src!==i){
+        document.removeEventListener('touchmove',onDragHandleMove);
+        return;
+      }
+      e.preventDefault(); // スクロール抑制
       const t=e.touches[0];
-      touchDragData={src:i,startX:t.clientX,startY:t.clientY,touchId:t.identifier};
-      createTouchClone('⠿',t.clientX,t.clientY,'#2E7D78');
+      if(touchClone){
+        touchClone.style.left=(t.clientX-touchClone.offsetWidth/2)+'px';
+        touchClone.style.top =(t.clientY-24)+'px';
+      }
+      cleanDZ();
+      const dz=findNearestDropZone(t.clientX,t.clientY);
+      if(dz)dz.classList.add('over');
+    }
+
+    handle.addEventListener('touchstart',e=>{
+      e.stopPropagation();
+      if(touchDragData)return;
+      const t=e.touches[0];
+      lpTouchId=t.identifier;
+      lpStartPos={x:t.clientX,y:t.clientY};
+      lpTimer=setTimeout(()=>{
+        lpTimer=null;
+        if(navigator.vibrate)navigator.vibrate(40);
+        exitJiggle();
+        touchDragData={src:i,touchId:lpTouchId};
+        // 元カードを浮かせる視覚フィードバック
+        const evWrap=handle.closest('.ev-wrap');
+        if(evWrap)evWrap.classList.add('dragging');
+        // イベント名を含むリッチなクローンカードを作成
+        const evName=evWrap?evWrap.querySelector('.ev-name')?.value||'⠿':'⠿';
+        createTouchCloneCard(evName,lpStartPos.x,lpStartPos.y);
+        // non-passiveのtouchmoveハンドラを登録してスクロールを抑制
+        document.addEventListener('touchmove',onDragHandleMove,{passive:false});
+      },400);
+    },{passive:true});
+
+    function clearLP(){
+      if(lpTimer){clearTimeout(lpTimer);lpTimer=null;}
+    }
+    handle.addEventListener('touchend',clearLP,{passive:true});
+    handle.addEventListener('touchcancel',clearLP,{passive:true});
+    handle.addEventListener('touchmove',e=>{
+      // 少し動いたら長押しキャンセル
+      if(lpTimer&&e.touches.length){
+        const t=e.touches[0];
+        const dx=t.clientX-lpStartPos.x,dy=t.clientY-lpStartPos.y;
+        if(Math.sqrt(dx*dx+dy*dy)>8)clearLP();
+      }
     },{passive:true});
   });
 
@@ -1152,9 +1199,14 @@ function setupDragDrop(){
 
     // ── 長押し（タッチ）
     conn.addEventListener('touchstart',e=>{
+      // ゴーストが残っている場合は強制クリーンアップして継続
+      if(touchDragData?.src==='new-add'){
+        document.removeEventListener('touchmove',onGhostMove);
+        stopGhostScroll();removeGhostCard();cleanDZ();touchDragData=null;
+      }
       if(touchDragData)return;
       if(e.target.closest('.dur-btn,.conn-add-btn'))return;
-      const t=e.touches[0];
+      const t=e.changedTouches[0]; // touches[0]ではなくchangedTouches[0]で正しい指を取得
       lpTouchId=t.identifier;
       lpTouchPos={x:t.clientX,y:t.clientY};
       lpTimer=setTimeout(()=>{
@@ -1204,9 +1256,14 @@ function setupDragDrop(){
       const IGNORE='.ev-wrap,.connector,.drop-zone,.dur-btn,.ev-time,.ev-name,.drag-handle,.list-toggle,.ev-del-btn,.check-box,.check-text,.add-check-input,button,input';
 
       bg.addEventListener('touchstart',e=>{
+        // ゴーストが残っている場合は強制クリーンアップして継続
+        if(touchDragData?.src==='new-add'){
+          document.removeEventListener('touchmove',onGhostMove);
+          stopGhostScroll();removeGhostCard();cleanDZ();touchDragData=null;
+        }
         if(touchDragData)return;
         if(e.target.closest(IGNORE))return;
-        const t=e.touches[0];
+        const t=e.changedTouches[0]; // touches[0]ではなくchangedTouches[0]で正しい指を取得
         bgTouchId=t.identifier;
         bgTouchPos={x:t.clientX,y:t.clientY};
         bgLpTimer=setTimeout(()=>{
@@ -1383,23 +1440,45 @@ function createTouchClone(text,x,y,color){
   touchClone.style.cssText=`position:fixed;left:${x-22}px;top:${y-22}px;width:44px;height:44px;background:${bg};color:#fff;border-radius:50%;font-size:20px;font-weight:900;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:9999;opacity:.92;box-shadow:0 4px 16px rgba(0,0,0,.22);font-family:'M PLUS Rounded 1c',sans-serif;line-height:1`;
   document.body.appendChild(touchClone);
 }
+
+// イベントカード風のリッチなドラッグクローン
+function createTouchCloneCard(name,x,y){
+  removeTouchClone();
+  touchClone=document.createElement('div');
+  touchClone.style.cssText=`position:fixed;z-index:9999;pointer-events:none;background:#fff;border-radius:22px;padding:8px 14px;display:flex;align-items:center;gap:8px;max-width:220px;opacity:.88;box-shadow:0 8px 28px rgba(0,0,0,.22),0 2px 8px rgba(0,0,0,.12);border:2px solid rgba(46,125,120,.35);font-family:'M PLUS Rounded 1c',sans-serif;transform:rotate(-2deg) scale(1.04);transition:transform .1s;`;
+  const dot=document.createElement('span');dot.textContent='⠿';dot.style.cssText='font-size:13px;color:#c8c8c8;flex-shrink:0';
+  const label=document.createElement('span');label.textContent=name||'イベント';label.style.cssText='font-size:14px;font-weight:500;color:#1a1a1a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:160px';
+  touchClone.appendChild(dot);touchClone.appendChild(label);
+  document.body.appendChild(touchClone);
+  const W=touchClone.offsetWidth||180,H=touchClone.offsetHeight||36;
+  touchClone.style.left=(x-W/2)+'px';
+  touchClone.style.top=(y-H/2-10)+'px';
+}
 function removeTouchClone(){if(touchClone){touchClone.remove();touchClone=null;}}
 
 document.addEventListener('touchmove',e=>{
   if(!touchDragData)return;
   if(touchDragData.src==='new-add') return; // onGhostMoveで処理済み
+  if(typeof touchDragData.src==='number') return; // onDragHandleMoveで処理済み
   if(touchClone){touchClone.style.left=(e.touches[0].clientX-22)+'px';touchClone.style.top=(e.touches[0].clientY-22)+'px';}
   cleanDZ();
   const el=document.elementFromPoint(e.touches[0].clientX,e.touches[0].clientY);
   if(el){const dz=el.closest('.drop-zone');if(dz)dz.classList.add('over');}
 },{passive:true});
 
-// タッチキャンセル時はゴーストを消す
-document.addEventListener('touchcancel',()=>{
-  if(touchDragData?.src==='new-add'){
+// タッチキャンセル時はゴースト・ドラッグを確実に片付ける
+document.addEventListener('touchcancel',e=>{
+  if(!touchDragData) return;
+  if(touchDragData.src==='new-add'){
     document.removeEventListener('touchmove',onGhostMove);
     stopGhostScroll();
     removeGhostCard();
+    cleanDZ();
+    touchDragData=null;
+  } else {
+    // 通常ドラッグのキャンセルも処理
+    removeTouchClone();
+    document.querySelectorAll('.ev-wrap.dragging').forEach(w=>w.classList.remove('dragging'));
     cleanDZ();
     touchDragData=null;
   }
@@ -1409,7 +1488,9 @@ document.addEventListener('touchend',e=>{
   if(touchDragData?.src==='new-add'){
     // ゴーストを動かしていた指が離れたか確認
     const ghostEnded=Array.from(e.changedTouches).some(t=>t.identifier===touchDragData.touchId);
-    if(!ghostEnded) return; // 別の指が離れただけ → 継続
+    // 離れた指でなくても、ゴーストの指がもうアクティブな指一覧に存在しなければ終了とみなす
+    const ghostStillActive=Array.from(e.touches).some(t=>t.identifier===touchDragData.touchId);
+    if(!ghostEnded && ghostStillActive) return; // 別の指が離れただけ → 継続
 
     document.removeEventListener('touchmove',onGhostMove);
     stopGhostScroll();
@@ -1440,15 +1521,16 @@ document.addEventListener('touchend',e=>{
     if(!dragEnded)return;
   }
   removeTouchClone();
+  // non-passiveのtouchmoveハンドラを削除（touchDragData=nullで内部return済みだが念のため）
+  // 元カードの浮かせスタイルを解除
+  document.querySelectorAll('.ev-wrap.dragging').forEach(w=>w.classList.remove('dragging'));
   // ドラッグ開始した指のtouchを取得
   const t=(touchDragData.touchId!=null
     ? Array.from(e.changedTouches).find(t=>t.identifier===touchDragData.touchId)
     : null) || e.changedTouches[0];
-  const el=document.elementFromPoint(t.clientX,t.clientY);
-  if(el){
-    const dz=el.closest('.drop-zone');
-    if(dz){handleDrop(parseInt(dz.dataset.insert),touchDragData.src);}
-  }
+  // findNearestDropZoneで広い範囲からドロップゾーンを検出
+  const dz=findNearestDropZone(t.clientX,t.clientY);
+  if(dz){handleDrop(parseInt(dz.dataset.insert),touchDragData.src);}
   cleanDZ();
   touchDragData=null;
 });
