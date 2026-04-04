@@ -269,7 +269,7 @@ body::before{
 .swipe-prev-hint.show{opacity:1}
 
 /* ── スライドコンテナ ── */
-.slide-viewport{width:100%;position:relative;overflow:hidden}
+.slide-viewport{width:100%;position:relative;overflow-x:hidden;overflow-y:visible}
 .slide-track{
   display:flex;width:300%;
   will-change:transform;
@@ -1938,6 +1938,34 @@ function renderChecklist(evs,evIdx,paneId){
     inp.className='check-text'+(c.done?' done':'');
     inp.value=c.text;
     inp.addEventListener('input',function(){c.text=this.value;saveToFirestore();});
+    // 空で確定（Enter or フォーカスを外す）→ アイテム削除
+    inp.addEventListener('keydown',function(ev){
+      if(ev.key==='Enter'){
+        ev.preventDefault();
+        if(this.value.trim()===''){
+          checks.splice(ci,1);
+          renderChecklist(evs,evIdx,pid);
+          saveToFirestore();
+          return;
+        }
+        // 次のadd-check-inputへフォーカス
+        const ai=cl.querySelector('.add-check-input');
+        if(ai) ai.focus();
+      }
+      if(ev.key==='Backspace'&&this.value===''){
+        ev.preventDefault();
+        checks.splice(ci,1);
+        renderChecklist(evs,evIdx,pid);
+        saveToFirestore();
+      }
+    });
+    inp.addEventListener('blur',function(){
+      if(this.value.trim()===''){
+        checks.splice(ci,1);
+        renderChecklist(evs,evIdx,pid);
+        saveToFirestore();
+      }
+    });
 
     // ── 📍チェックアイテム用ピンボタン ──
     const cPinBtn=document.createElement('button');
@@ -2370,7 +2398,7 @@ function exitMapPlacingMode(keepOpen){
   if(pip) pip.classList.remove('placing');
   if(ph) ph.style.display='none';
   if(mh) mh.style.display='block';
-  // キャンセル時のみ最小化。ピン設置完了時(keepOpen=true)は地図をそのまま保つ
+  // キャンセル時のみ最小化。ピン設置完了時(keepOpen=true)は地図をそのまま
   if(!keepOpen && mapPipState>0){mapPipState=0;applyMapPipState();}
 }
 
@@ -2431,13 +2459,13 @@ function initMapPip(){
   const styleBar=document.getElementById('styleBar');
   if(!pip||!palBtn) return;
 
-  // マップにタッチ中は背後のページスクロールを防ぐ
+  // マップにタッチ中は背後のページスクロールを防ぐ（LeafletにはtouchはそのままCaptureせず渡す）
   pip.addEventListener('touchstart',e=>{
     if(mapPipState>0) e.stopPropagation();
-  },{passive:false,capture:true});
+  },{passive:false,capture:false});
   pip.addEventListener('touchmove',e=>{
-    if(mapPipState>0){ e.stopPropagation(); }
-  },{passive:false,capture:true});
+    if(mapPipState>0){ e.preventDefault(); }  // ページスクロールはブロック、Leafletには通す
+  },{passive:false,capture:false});
 
   let ptStart=null;
 
