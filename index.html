@@ -269,7 +269,7 @@ body::before{
 .swipe-prev-hint.show{opacity:1}
 
 /* ── スライドコンテナ ── */
-.slide-viewport{width:100%;position:relative;overflow-x:hidden;overflow-y:visible}
+.slide-viewport{width:100%;position:relative;overflow:hidden}
 .slide-track{
   display:flex;width:300%;
   will-change:transform;
@@ -2433,9 +2433,29 @@ function initMapPip(){
 
   // マップにタッチ中は背後のページスクロールを防ぐ
   // ※ touchstartはLeafletに通す（stopPropagationしない）
+  // 水平スワイプ（日付移動）は許可し、垂直スクロールのみ防止
+  let mapTouchStart = null;
+  pip.addEventListener('touchstart',e=>{
+    if(mapPipState>0){
+      mapTouchStart = {x: e.touches[0].clientX, y: e.touches[0].clientY};
+    }
+  },{passive:true});
+  
   pip.addEventListener('touchmove',e=>{
-    if(mapPipState>0){ e.preventDefault(); }
+    if(mapPipState>0 && mapTouchStart){
+      const dx = Math.abs(e.touches[0].clientX - mapTouchStart.x);
+      const dy = Math.abs(e.touches[0].clientY - mapTouchStart.y);
+      // 水平方向の移動が大きい場合（日付スワイプ）は preventDefault しない
+      // 垂直方向の移動が大きい場合（地図スクロール）のみ preventDefault
+      if(dy > dx * 1.5){
+        e.preventDefault();
+      }
+    }
   },{passive:false});
+  
+  pip.addEventListener('touchend',()=>{
+    mapTouchStart = null;
+  },{passive:true});
 
   let ptStart=null;
 
