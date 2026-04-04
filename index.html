@@ -582,15 +582,18 @@ body::before{
 .img-toggle-label{font-size:11px;color:#3b82f6;font-weight:700;cursor:pointer}
 .img-expand{max-height:0;overflow:hidden;transition:max-height .3s cubic-bezier(.4,0,.2,1);padding:0 0 0 30px}
 .img-expand.open{max-height:400px}
-.img-expand-inner{position:relative;display:inline-block;margin:4px 0;max-width:100%}
-.img-expand-inner img{display:block;max-width:100%;max-height:260px;border-radius:10px;border:1.5px solid rgba(147,197,253,.5);object-fit:contain}
-.img-del-btn{
-  position:absolute;top:4px;right:4px;
-  width:22px;height:22px;border-radius:50%;
-  border:2px solid #fff;background:#ff3b30;color:#fff;
-  font-size:12px;cursor:pointer;
+.img-expand-inner{position:relative;display:inline-block;margin:4px 0;max-width:100%;transition:all .3s ease}
+.img-expand-inner img{display:block;max-width:100%;max-height:260px;border-radius:10px;border:1.5px solid rgba(147,197,253,.5);object-fit:contain;cursor:zoom-in;transition:all .3s ease}
+
+/* ── 画像のマックス表示（全画面） ── */
+.img-expand-inner.maximized{
+  position:fixed;top:0;left:0;width:100vw;height:100vh;
+  background:rgba(0,0,0,.92);z-index:100000;
   display:flex;align-items:center;justify-content:center;
-  box-shadow:0 1px 4px rgba(0,0,0,.3);touch-action:manipulation;
+  margin:0;max-width:none;
+}
+.img-expand-inner.maximized img{
+  max-width:100%;max-height:100%;border-radius:0;border:none;cursor:zoom-out;
 }
 </style>
 </head>
@@ -2055,11 +2058,11 @@ function renderChecklist(evs,evIdx,paneId){
 
       const vBtn=document.createElement('button');
       vBtn.className='img-v-btn'+(c._imgOpen?' open':'');
-      vBtn.textContent='▼';
+      vBtn.innerHTML=makeVIcon(c._imgOpen); // 専用アイコン関数
 
       const lbl=document.createElement('span');
       lbl.className='img-toggle-label';
-      lbl.textContent=(c._imgOpen?'▲':'▼')+' 写真1枚';
+      lbl.textContent=' 写真を表示';
 
       const expand=document.createElement('div');
       expand.className='img-expand'+(c._imgOpen?' open':'');
@@ -2068,11 +2071,18 @@ function renderChecklist(evs,evIdx,paneId){
 
       const imgEl=document.createElement('img');
       imgEl.src=c.img;imgEl.alt='添付写真';
+      
+      // 画像タップでマックス表示に切り替え
+      imgEl.addEventListener('click',e=>{
+        e.stopPropagation();
+        inner.classList.toggle('maximized');
+      });
 
       const delImgBtn=document.createElement('button');
       delImgBtn.className='img-del-btn';delImgBtn.textContent='✕';
       delImgBtn.addEventListener('click',e=>{
         e.stopPropagation();
+        inner.classList.remove('maximized');
         c.img=null;c._imgOpen=false;
         renderChecklist(evs,evIdx,pid);saveToFirestore();
       });
@@ -2081,8 +2091,8 @@ function renderChecklist(evs,evIdx,paneId){
         e.stopPropagation();
         c._imgOpen=!c._imgOpen;
         vBtn.className='img-v-btn'+(c._imgOpen?' open':'');
+        vBtn.innerHTML=makeVIcon(c._imgOpen);
         expand.className='img-expand'+(c._imgOpen?' open':'');
-        lbl.textContent=(c._imgOpen?'▲':'▼')+' 写真1枚';
       });
       lbl.addEventListener('click',()=>vBtn.click());
 
