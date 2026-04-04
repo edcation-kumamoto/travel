@@ -1938,33 +1938,18 @@ function renderChecklist(evs,evIdx,paneId){
     inp.className='check-text'+(c.done?' done':'');
     inp.value=c.text;
     inp.addEventListener('input',function(){c.text=this.value;saveToFirestore();});
-    // 空で確定（Enter or フォーカスを外す）→ アイテム削除
     inp.addEventListener('keydown',function(ev){
       if(ev.key==='Enter'){
         ev.preventDefault();
-        if(this.value.trim()===''){
-          checks.splice(ci,1);
-          renderChecklist(evs,evIdx,pid);
-          saveToFirestore();
-          return;
-        }
-        // 次のadd-check-inputへフォーカス
-        const ai=cl.querySelector('.add-check-input');
-        if(ai) ai.focus();
+        if(this.value.trim()===''){checks.splice(ci,1);renderChecklist(evs,evIdx,pid);saveToFirestore();return;}
+        const ai=cl.querySelector('.add-check-input');if(ai)ai.focus();
       }
       if(ev.key==='Backspace'&&this.value===''){
-        ev.preventDefault();
-        checks.splice(ci,1);
-        renderChecklist(evs,evIdx,pid);
-        saveToFirestore();
+        ev.preventDefault();checks.splice(ci,1);renderChecklist(evs,evIdx,pid);saveToFirestore();
       }
     });
     inp.addEventListener('blur',function(){
-      if(this.value.trim()===''){
-        checks.splice(ci,1);
-        renderChecklist(evs,evIdx,pid);
-        saveToFirestore();
-      }
+      if(this.value.trim()===''){checks.splice(ci,1);renderChecklist(evs,evIdx,pid);saveToFirestore();}
     });
 
     // ── 📍チェックアイテム用ピンボタン ──
@@ -2207,55 +2192,38 @@ function initLeafletMap(){
       }
     }
     _removeTempMarker();
-    exitMapPlacingMode(true); // ピン設置完了→地図は開いたまま
+    exitMapPlacingMode(true);
     if(navigator.vibrate) navigator.vibrate([30,20,60]);
     saveToFirestore();
   }
 
-  // タッチ長押し検出
+  // タッチ長押し検出 → 500ms長押しで即ピン確定（iOSでdragendが来ないためシンプル方式）
   lMap.on('mousedown touchstart',e=>{
     if(mapPlacingIdx===null) return;
-    _mapDraggingPin=false;
     clearTimeout(_mapLongTimer);
+    _mapDraggingPin=false;
     const latlng=e.latlng;
     _mapLongTimer=setTimeout(()=>{
-      _mapDraggingPin=true;
-      // 仮マーカーを表示
-      _removeTempMarker();
-      const col=_placingColor||'#e74c3c';
-      const tmpIcon=L.divIcon({
-        className:'tmp-pin',
-        html:`<div style="width:28px;height:28px;background:${col};border:3px solid #fff;border-radius:50% 50% 50% 0;transform:rotate(-45deg) scale(1.2);box-shadow:0 3px 12px rgba(0,0,0,.5);transition:transform .1s"></div>`,
-        iconSize:[28,28],iconAnchor:[14,28],
-      });
-      _mapTempMarker=L.marker(latlng,{icon:tmpIcon,draggable:true}).addTo(lMap);
+      _mapLongTimer=null;
       if(navigator.vibrate) navigator.vibrate(50);
-      // ドラッグ終了でピン確定
-      _mapTempMarker.on('dragend',ev2=>{
-        _placePinAt(ev2.target.getLatLng());
-      });
-    },500);
+      _placePinAt(latlng);
+    },600);
   });
 
   lMap.on('mouseup touchend',e=>{
     clearTimeout(_mapLongTimer);
     _mapLongTimer=null;
-    // 長押しドラッグ中でなければ仮マーカーを確定
-    if(_mapDraggingPin && _mapTempMarker){
-      // dragendで処理されるのでここは何もしない
-    }
     _mapDraggingPin=false;
   });
 
   lMap.on('mousemove touchmove',e=>{
-    if(!_mapDraggingPin || !_mapTempMarker) return;
-    _mapTempMarker.setLatLng(e.latlng);
+    // 長押し中に指が動いたらキャンセル（誤設置防止）
+    if(_mapLongTimer){clearTimeout(_mapLongTimer);_mapLongTimer=null;}
   });
 
   // クリック（短押し）はピン設置モード中は何もしない（誤設置防止）
   lMap.on('click',e=>{
     if(mapPlacingIdx===null) return;
-    // 長押しでないタップは無視（誤設置防止）
   });
 
   // 既存ピンを配置
@@ -2390,7 +2358,6 @@ function exitMapPlacingMode(keepOpen){
   _placingCheckRef=null;
   _placingCheckOnPlace=null;
   _placingColor=null;
-  // ピンボタンの点滅解除
   if(_placingPinBtn){_placingPinBtn.classList.remove('pin-selecting');_placingPinBtn=null;}
   const pip=document.getElementById('mapPip');
   const ph=document.getElementById('placeHint');
@@ -2398,7 +2365,7 @@ function exitMapPlacingMode(keepOpen){
   if(pip) pip.classList.remove('placing');
   if(ph) ph.style.display='none';
   if(mh) mh.style.display='block';
-  // キャンセル時のみ最小化。ピン設置完了時(keepOpen=true)は地図をそのまま
+  // keepOpen=trueのとき（ピン設置成功）は地図サイズそのまま、それ以外はsize-0に戻す
   if(!keepOpen && mapPipState>0){mapPipState=0;applyMapPipState();}
 }
 
@@ -2459,13 +2426,11 @@ function initMapPip(){
   const styleBar=document.getElementById('styleBar');
   if(!pip||!palBtn) return;
 
-  // マップにタッチ中は背後のページスクロールを防ぐ（LeafletにはtouchはそのままCaptureせず渡す）
-  pip.addEventListener('touchstart',e=>{
-    if(mapPipState>0) e.stopPropagation();
-  },{passive:false,capture:false});
+  // マップにタッチ中は背後のページスクロールを防ぐ
+  // ※ touchstartはLeafletに通す（stopPropagationしない）
   pip.addEventListener('touchmove',e=>{
-    if(mapPipState>0){ e.preventDefault(); }  // ページスクロールはブロック、Leafletには通す
-  },{passive:false,capture:false});
+    if(mapPipState>0){ e.preventDefault(); }
+  },{passive:false});
 
   let ptStart=null;
 
