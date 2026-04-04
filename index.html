@@ -802,6 +802,7 @@ function applyRemoteSnap(snap){
 
   if(!initialLoadDone){
     initialLoadDone = true;
+    isLoadingInitialData = false; // 初期ロード完了
     days = remoteDays;
     document.getElementById('tripName').value = data.tripName || '';
     days.forEach(d=>d.events.forEach(e=>{if(e.id>=nextId)nextId=e.id+1;}));
@@ -836,6 +837,8 @@ function applyRemoteSnap(snap){
 
 // Firestoreからリアルタイム受信
 let initialLoadDone = false;
+let isLoadingInitialData = true; // 初期ロード中フラグを追加
+
 onSnapshot(doc(db,'trips',tripId), snap => {
   // hasPendingWrites=true はローカル書き込みの即時エコー → 無視
   if(snap.metadata.hasPendingWrites) return;
@@ -843,6 +846,7 @@ onSnapshot(doc(db,'trips',tripId), snap => {
   if(!snap.exists()){
     if(initialLoadDone) return;
     initialLoadDone = true;
+    isLoadingInitialData = false; // 初期ロード完了
     days=[{
       date:'10/10',
       events:[
@@ -2562,6 +2566,11 @@ function syncMapMarkers(){
 }
 
 function renderTimeline(){
+  // 全ての一時的なUI要素をクリーンアップ
+  exitJiggle(); // jiggleモードを確実に解除
+  hideAllAddBtns(); // 追加ボタンを非表示
+  exitMapPlacingMode(); // ピン設置モードを解除
+  
   const tl=document.getElementById('timelineArea');
   tl.innerHTML='';
   renderTimelineInto(tl, getEvents(), curDay);
