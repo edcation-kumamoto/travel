@@ -593,7 +593,10 @@ body::before{
   cursor:zoom-out;
 }
 .img-modal.open{display:flex}
-.img-modal img{max-width:98%;max-height:98%;object-fit:contain;box-shadow:0 0 30px rgba(0,0,0,.5)}
+.img-modal img{max-width:98%;max-height:98%;object-fit:contain;box-shadow:0 0 30px rgba(0,0,0,.5);transition:transform .1s ease-out;will-change:transform}
+
+/* ── 背景スクロール禁止 ── */
+body.modal-open{overflow:hidden;height:100vh;position:fixed;width:100%}
 
 .img-del-btn{
   position:absolute;top:4px;right:4px;
@@ -609,8 +612,8 @@ body::before{
 <body>
 
 <div id="ptr-indicator">↻ 離してリロード</div>
-<div class="img-modal" id="imgModal" onclick="this.classList.remove('open')">
-  <img src="" id="modalImg">
+<div class="img-modal" id="imgModal">
+  <img src="" id="modalImg" style="transform:scale(1)">
 </div>
 <div class="app" id="app">
   <div class="app-head" id="appHead">
@@ -2090,7 +2093,9 @@ function renderChecklist(evs,evIdx,paneId){
         const modal=document.getElementById('imgModal');
         const mImg=document.getElementById('modalImg');
         mImg.src=c.img;
+        mImg.style.transform='scale(1)';// 初期化
         modal.classList.add('open');
+        document.body.classList.add('modal-open');
       });
 
       const delImgBtn=document.createElement('button');
@@ -2180,6 +2185,55 @@ function makeVIcon(isOpen){
     <path d="M1 1L5 5L9 1" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
   </svg>`;
 }
+
+// ── 🖼️ 画像モーダルのズーム＆スクロール制御 ──
+(function(){
+  const modal = document.getElementById('imgModal');
+  const mImg = document.getElementById('modalImg');
+  let startDist = 0;
+  let currentScale = 1;
+  let isZooming = false;
+
+  // モーダルを閉じる処理
+  function closeModal(){
+    modal.classList.remove('open');
+    document.body.classList.remove('modal-open');
+    mImg.style.transform = 'scale(1)';
+    currentScale = 1;
+  }
+
+  modal.addEventListener('click', e => {
+    if(!isZooming) closeModal();
+  });
+
+  mImg.addEventListener('touchstart', e => {
+    if (e.touches.length === 2) {
+      isZooming = true;
+      startDist = Math.hypot(e.touches[0].pageX - e.touches[1].pageX, e.touches[0].pageY - e.touches[1].pageY);
+    }
+  }, {passive: false});
+
+  mImg.addEventListener('touchmove', e => {
+    if (e.touches.length === 2) {
+      e.preventDefault();
+      const dist = Math.hypot(e.touches[0].pageX - e.touches[1].pageX, e.touches[0].pageY - e.touches[1].pageY);
+      const zoom = dist / startDist;
+      let newScale = currentScale * zoom;
+      if(newScale < 0.5) newScale = 0.5;
+      if(newScale > 5) newScale = 5;
+      mImg.style.transform = `scale(${newScale})`;
+    }
+  }, {passive: false});
+
+  mImg.addEventListener('touchend', e => {
+    if (e.touches.length < 2 && isZooming) {
+      const transform = mImg.style.transform;
+      const match = transform.match(/scale\(([^)]+)\)/);
+      if(match) currentScale = parseFloat(match[1]);
+      setTimeout(() => { isZooming = false; }, 100);
+    }
+  });
+})();
 
 // ════════════════════════════════════════════════════════════
 //  マップ機能
