@@ -274,7 +274,7 @@ body::before{
   display:flex;width:300%;
   will-change:transform;
 }
-.slide-pane{width:33.333%;flex-shrink:0;min-height:200px}
+.slide-pane{width:33.333%;flex-shrink:0;min-height:200px;overflow:hidden}
 
 /* 新日程作成オーバーレイ */
 .create-overlay{
@@ -1938,6 +1938,11 @@ function renderChecklist(evs,evIdx,paneId){
     inp.className='check-text'+(c.done?' done':'');
     inp.value=c.text;
     inp.addEventListener('input',function(){c.text=this.value;saveToFirestore();});
+    inp.addEventListener('keydown',function(ev){
+      if(ev.key==='Enter'){ev.preventDefault();if(this.value.trim()===''){checks.splice(ci,1);renderChecklist(evs,evIdx,pid);saveToFirestore();return;}const ai=cl.querySelector('.add-check-input');if(ai)ai.focus();}
+      if(ev.key==='Backspace'&&this.value===''){ev.preventDefault();checks.splice(ci,1);renderChecklist(evs,evIdx,pid);saveToFirestore();}
+    });
+    inp.addEventListener('blur',function(){if(this.value.trim()===''){checks.splice(ci,1);renderChecklist(evs,evIdx,pid);saveToFirestore();}});
     inp.addEventListener('keydown',function(ev){
       if(ev.key==='Enter'){
         ev.preventDefault();
