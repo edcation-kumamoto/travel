@@ -363,7 +363,7 @@ body::before{
              height .4s cubic-bezier(.4,0,.2,1),
              border-radius .4s cubic-bezier(.4,0,.2,1);
 }
-.map-pip.size-1{width:55vw;height:80px}
+.map-pip.size-1{width:calc(100vw - 28px);height:80px}
 .map-pip.size-2{width:calc(100vw - 28px);height:50vh;border-radius:18px}
 .map-pip.placing{outline:3px solid #F5C842;outline-offset:-3px;cursor:crosshair}
 #leafletMap{width:100%;height:100%;position:absolute;top:0;left:0}
@@ -384,14 +384,40 @@ body::before{
 /* 検索バー */
 .map-search{
   position:fixed;bottom:108px;right:14px;
-  display:flex;align-items:center;
+  display:flex;align-items:center;flex-direction:row-reverse;
   z-index:501;opacity:0;pointer-events:none;
   transition:opacity .2s;
-  background:#fff;border-radius:20px;
-  box-shadow:0 2px 12px rgba(0,0,0,.2);
-  overflow:hidden;
 }
 .map-search.show{opacity:1;pointer-events:auto}
+.map-search-icon-btn{
+  width:38px;height:38px;border:none;
+  background:#2E7D78;color:#fff;
+  border-radius:50%;
+  font-size:16px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  flex-shrink:0;touch-action:manipulation;
+  box-shadow:0 2px 10px rgba(0,0,0,.3);
+  transition:background .15s, border-radius .3s;
+  z-index:1;
+}
+.map-search.expanded .map-search-icon-btn{border-radius:0 50% 50% 0}
+.map-search-icon-btn:active{background:#1a5c58}
+.map-search-expand{
+  display:flex;align-items:center;
+  background:#fff;
+  border-radius:20px 0 0 20px;
+  box-shadow:0 2px 12px rgba(0,0,0,.2);
+  overflow:hidden;
+  max-width:0;
+  transition:max-width .3s cubic-bezier(.4,0,.2,1), opacity .25s;
+  opacity:0;
+  pointer-events:none;
+}
+.map-search.expanded .map-search-expand{
+  max-width:180px;
+  opacity:1;
+  pointer-events:auto;
+}
 .map-search input{
   border:none;outline:none;padding:7px 12px;
   font-family:'M PLUS Rounded 1c',sans-serif;
@@ -399,7 +425,6 @@ body::before{
   -webkit-user-select:text;user-select:text;
 }
 .map-search input::placeholder{color:#aaa}
-.map-search button{border:none;background:#2E7D78;color:#fff;padding:7px 10px;cursor:pointer;font-size:12px;touch-action:manipulation}
 
 /* Leaflet上書き */
 .leaflet-control-zoom{display:none!important}
@@ -529,6 +554,14 @@ body::before{
   flex-shrink:0;touch-action:manipulation;
 }
 .check-img-btn:active{background:rgba(59,130,246,.28)}
+.check-pin-btn{
+  width:20px;height:20px;border-radius:50%;border:none;
+  background:transparent;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  flex-shrink:0;touch-action:manipulation;padding:0;
+  transition:transform .15s;
+}
+.check-pin-btn:active{transform:scale(.82)}
 .img-toggle-row{display:flex;align-items:center;gap:6px;padding:4px 0 2px 30px}
 .img-v-btn{
   width:22px;height:22px;border-radius:6px;border:none;
@@ -602,8 +635,10 @@ body::before{
 
 <!-- 検索バー -->
 <div class="map-search" id="mapSearch">
-  <input type="text" id="searchInput" placeholder="場所を検索…"/>
-  <button id="searchBtn">🔍</button>
+  <button class="map-search-icon-btn" id="searchIconBtn">🔍</button>
+  <div class="map-search-expand" id="searchExpand">
+    <input type="text" id="searchInput" placeholder="場所を検索…"/>
+  </div>
 </div>
 
 <!-- スタイルピッカー -->
@@ -1895,28 +1930,96 @@ function renderChecklist(evs,evIdx,paneId){
     camBtn.addEventListener('click',e=>{
       e.stopPropagation();
       const fileIn=document.createElement('input');
-      fileIn.type='file';fileIn.accept='image/*';
+      fileIn.type='file';fileIn.accept='image/*';fileIn.style.display='none';
+      document.body.appendChild(fileIn);
       fileIn.addEventListener('change',async()=>{
-        if(!fileIn.files[0])return;
+        if(!fileIn.files[0]){fileIn.remove();return;}
         camBtn.textContent='⏳';
         try{
           const b64=await readFileAsBase64(fileIn.files[0]);
           c.img=b64;
+          fileIn.remove();
           renderChecklist(evs,evIdx,pid);
           saveToFirestore();
         }catch(err){
           camBtn.textContent='📷';
+          fileIn.remove();
           showToast('画像の読み込みに失敗しました');
         }
       });
       fileIn.click();
     });
 
+    // チェックアイテム用ピンボタン
+    const cPinBtn=document.createElement('button');
+    cPinBtn.className='check-pin-btn';
+    const hasCPin=!!(c.pin&&c.pin.lat);
+    const cPinColor=PIN_COLORS[(evIdx*10+ci)%PIN_COLORS.length];
+    cPinBtn.innerHTML=makePinSvg(hasCPin?cPinColor:'#ccc',hasCPin?14:11);
+    cPinBtn.title=hasCPin?'ピンを移動（長押しで解除）':'ピンを設置';
+    if(lMap){
+      (function(e_ref, cidx, col){
+        let cPinLong=null;
+        cPinBtn.addEventListener('pointerdown',ev=>{
+          if(!(e_ref.pin)) return;
+          cPinLong=setTimeout(()=>{
+            cPinLong=null;
+            e_ref.pin=null;
+            cPinBtn.innerHTML=makePinSvg('#ccc',11);
+            cPinBtn.title='ピンを設置';
+            if(navigator.vibrate)navigator.vibrate(40);
+            saveToFirestore();
+          },700);
+        });
+        cPinBtn.addEventListener('pointerup',()=>{if(cPinLong){clearTimeout(cPinLong);cPinLong=null;}});
+        cPinBtn.addEventListener('pointercancel',()=>{if(cPinLong){clearTimeout(cPinLong);cPinLong=null;}});
+        cPinBtn.addEventListener('click',ev=>{
+          ev.stopPropagation();
+          // ピン設置モード（チェックアイテム用）
+          mapPlacingIdx=null; // イベントピンモードではない
+          mapPipState=2; applyMapPipState();
+          const pip=document.getElementById('mapPip');
+          const ph=document.getElementById('placeHint');
+          const mh=document.getElementById('mapHint');
+          setTimeout(()=>{
+            pip.classList.add('placing');
+            if(ph)ph.style.display='block';
+            if(mh)mh.style.display='none';
+            // クリックハンドラ（1回限り）
+            function onMapClickForCheck(me){
+              lMap.off('click',onMapClickForCheck);
+              pip.classList.remove('placing');
+              if(ph)ph.style.display='none';
+              if(mh)mh.style.display='block';
+              e_ref.pin={lat:me.latlng.lat,lng:me.latlng.lng};
+              cPinBtn.innerHTML=makePinSvg(col,14);
+              cPinBtn.title='ピンを移動（長押しで解除）';
+              // マーカー追加
+              if(!lMap)return;
+              const icon2=L.divIcon({
+                className:'lf-cpin-'+evIdx+'-'+cidx,
+                html:`<div style="width:16px;height:16px;background:${col};border:2px solid #fff;border-radius:50%;box-shadow:0 2px 6px rgba(0,0,0,.4)"></div>`,
+                iconSize:[16,16],iconAnchor:[8,8],popupAnchor:[0,-10],
+              });
+              const cm=L.marker([me.latlng.lat,me.latlng.lng],{icon:icon2}).addTo(lMap);
+              cm.bindPopup(`<div style="font-family:'M PLUS Rounded 1c',sans-serif;white-space:nowrap;font-size:11px"><span style="display:inline-block;width:7px;height:7px;background:${col};border-radius:50%;margin-right:4px;vertical-align:middle"></span>${e_ref.text||''}</div>`,{closeButton:false});
+              // 古いマーカーを削除
+              const oldKey='c-'+evIdx+'-'+cidx;
+              if(mapMarkers[oldKey])lMap.removeLayer(mapMarkers[oldKey]);
+              mapMarkers[oldKey]=cm;
+              saveToFirestore();
+            }
+            lMap.on('click',onMapClickForCheck);
+          },400);
+        });
+      })(c, ci, cPinColor);
+    }
+
     const del=document.createElement('button');
     del.className='check-del';del.textContent='×';
     del.addEventListener('click',()=>{checks.splice(ci,1);renderChecklist(evs,evIdx,pid);saveToFirestore();});
 
-    row.appendChild(box);row.appendChild(inp);row.appendChild(camBtn);row.appendChild(del);
+    row.appendChild(box);row.appendChild(inp);row.appendChild(cPinBtn);row.appendChild(camBtn);row.appendChild(del);
     cl.appendChild(row);
 
     // ── 画像がある場合: Vボタン行＋展開エリア ──
@@ -2043,12 +2146,14 @@ function initLeafletMap(){
     ev.pin={lat:e.latlng.lat,lng:e.latlng.lng};
     addMapMarker(idx,e.latlng.lat,e.latlng.lng);
     exitMapPlacingMode();
-    // 📍ボタン更新（renderTimelineIntoで生成されたev-wrapから探す）
+    // 📍ボタン＋ドラッグハンドル更新
     const color=PIN_COLORS[idx%PIN_COLORS.length];
     const evWraps=document.querySelectorAll('#timelineArea .ev-wrap');
     if(evWraps[idx]){
       const pb=evWraps[idx].querySelector('.map-pin-btn');
-      if(pb) pb.innerHTML=makePinSvg(color,18);
+      if(pb){ pb.innerHTML=makePinSvg(color,18); pb.title='ピンを移動（長押しで解除）'; }
+      const hd=evWraps[idx].querySelector('.drag-handle');
+      if(hd) hd.style.background=color;
     }
     saveToFirestore();
   });
@@ -2183,7 +2288,15 @@ function applyMapPipState(){
     document.getElementById('styleBar').classList.remove('show');
   }
   const srch=document.getElementById('mapSearch');
-  if(srch)srch.classList.toggle('show',mapPipState>0);
+  if(srch){
+    srch.classList.toggle('show',mapPipState>0);
+    // size-2(最大)時: 検索バーをマップの下端（bottom: calc(50vh + 20px + 8px)）に
+    if(mapPipState===2){
+      srch.style.bottom='calc(50vh + 30px)';
+    } else {
+      srch.style.bottom='108px';
+    }
+  }
   setTimeout(()=>{
     if(lMap){
       lMap.invalidateSize();
@@ -2196,6 +2309,15 @@ function initMapPip(){
   const palBtn=document.getElementById('palBtn');
   const styleBar=document.getElementById('styleBar');
   if(!pip||!palBtn) return;
+
+  // マップにタッチ中は背後のページスクロールを防ぐ
+  pip.addEventListener('touchstart',e=>{
+    if(mapPipState>0) e.stopPropagation();
+  },{passive:false,capture:true});
+  pip.addEventListener('touchmove',e=>{
+    if(mapPipState>0){ e.stopPropagation(); }
+  },{passive:false,capture:true});
+
   let ptStart=null;
 
   pip.addEventListener('pointerdown',e=>{
@@ -2226,26 +2348,48 @@ function initMapPip(){
 
 function initMapSearch(){
   const inp=document.getElementById('searchInput');
-  const btn=document.getElementById('searchBtn');
-  if(!inp||!btn)return;
+  const iconBtn=document.getElementById('searchIconBtn');
+  const srch=document.getElementById('mapSearch');
+  if(!inp||!iconBtn)return;
+
+  // 虫眼鏡ボタン: 展開/折りたたみ ＋ 展開中は検索実行
+  iconBtn.addEventListener('click',e=>{
+    e.stopPropagation();
+    if(srch.classList.contains('expanded')){
+      // 展開中→検索実行 or 折りたたみ
+      const q=inp.value.trim();
+      if(q){ doSearch(); }
+      else { srch.classList.remove('expanded'); }
+    } else {
+      srch.classList.add('expanded');
+      setTimeout(()=>inp.focus(),320);
+    }
+  });
+
+  // マップPiP外タップで折りたたむ
+  document.addEventListener('click',e=>{
+    if(!srch.contains(e.target)) srch.classList.remove('expanded');
+  });
+
   function doSearch(){
     const q=inp.value.trim();
     if(!q)return;
-    btn.textContent='…';
+    iconBtn.textContent='…';
     fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=1`,
       {headers:{'Accept-Language':'ja','User-Agent':'Tabi-Shiori-App'}})
     .then(r=>r.json())
     .then(data=>{
-      btn.textContent='🔍';
+      iconBtn.textContent='🔍';
       if(data&&data.length>0){
         lMap.flyTo([parseFloat(data[0].lat),parseFloat(data[0].lon)],15,{duration:1.2});
+        srch.classList.remove('expanded');
+        inp.value='';
       } else {
         showToast('場所が見つかりませんでした');
       }
     })
-    .catch(()=>{ btn.textContent='🔍'; });
+    .catch(()=>{ iconBtn.textContent='🔍'; });
   }
-  btn.addEventListener('click',doSearch);
   inp.addEventListener('keydown',e=>{if(e.key==='Enter')doSearch();});
 }
 
@@ -2257,7 +2401,25 @@ function syncMapMarkers(){
   mapMarkers={};
   mapActiveEvIdx=null;
   const evs=getEvents();
-  evs.forEach((ev,i)=>{if(ev.pin)addMapMarker(i,ev.pin.lat,ev.pin.lng);});
+  evs.forEach((ev,i)=>{
+    if(ev.pin) addMapMarker(i,ev.pin.lat,ev.pin.lng);
+    // チェックアイテムのピンも再同期
+    if(ev.checks){
+      ev.checks.forEach((c,ci)=>{
+        if(c.pin&&c.pin.lat){
+          const col=PIN_COLORS[(i*10+ci)%PIN_COLORS.length];
+          const icon2=L.divIcon({
+            className:'lf-cpin-'+i+'-'+ci,
+            html:`<div style="width:16px;height:16px;background:${col};border:2px solid #fff;border-radius:50%;box-shadow:0 2px 6px rgba(0,0,0,.4)"></div>`,
+            iconSize:[16,16],iconAnchor:[8,8],popupAnchor:[0,-10],
+          });
+          const cm=L.marker([c.pin.lat,c.pin.lng],{icon:icon2}).addTo(lMap);
+          cm.bindPopup(`<div style="font-family:'M PLUS Rounded 1c',sans-serif;white-space:nowrap;font-size:11px"><span style="display:inline-block;width:7px;height:7px;background:${col};border-radius:50%;margin-right:4px;vertical-align:middle"></span>${c.text||''}</div>`,{closeButton:false});
+          mapMarkers['c-'+i+'-'+ci]=cm;
+        }
+      });
+    }
+  });
 }
 
 function renderTimeline(){
@@ -2332,9 +2494,10 @@ function renderTimelineInto(tl, evs, dayIdx){
     const card=document.createElement('div');card.className='ev-card';
     const handle=document.createElement('div');handle.className='drag-handle';
     handle.textContent='⠿';
-    // 6色ローテのピン色を設定
+    // ピンが設置済みの場合のみ色付き、未設置はグレー
     const pinColor=PIN_COLORS[i%PIN_COLORS.length];
-    handle.style.background=pinColor;
+    const hasPinNow=!!(e.pin&&e.pin.lat);
+    handle.style.background=hasPinNow?pinColor:'#c8c8c8';
 
     const nameIn=document.createElement('input');nameIn.className='ev-name';nameIn.placeholder='イベント名';nameIn.value=e.name;
     nameIn.dataset.evIdx=i; nameIn.dataset.role='name'; nameIn.dataset.dayIdx=dayIdx;
@@ -2345,15 +2508,39 @@ function renderTimelineInto(tl, evs, dayIdx){
     // 📍ボタン（SVGピン）
     const pinBtn=document.createElement('button');
     pinBtn.className='map-pin-btn';
-    pinBtn.title='ピンを設置';
     const hasPinAlready=!!(e.pin&&e.pin.lat);
+    pinBtn.title=hasPinAlready?'ピンを移動 / 長押しで解除':'ピンを設置';
     pinBtn.innerHTML=makePinSvg(hasPinAlready?pinColor:'#ccc',hasPinAlready?18:14);
     if(isMainPane){
       (function(idx,col){
         pinBtn.addEventListener('click',ev=>{
           ev.stopPropagation();
+          // ピン設置済み: 長押しで解除、タップで移動
           enterMapPlacingMode(idx,col);
         });
+        // 長押しでピン解除
+        let pinLongTimer=null;
+        pinBtn.addEventListener('pointerdown',ev=>{
+          if(!(days[curDay]?.events[idx]?.pin)) return;
+          pinLongTimer=setTimeout(()=>{
+            pinLongTimer=null;
+            const ev2=days[curDay]?.events[idx];
+            if(!ev2)return;
+            ev2.pin=null;
+            if(mapMarkers[idx]){lMap.removeLayer(mapMarkers[idx]);delete mapMarkers[idx];}
+            // ボタンをグレーに戻す
+            pinBtn.innerHTML=makePinSvg('#ccc',14);
+            pinBtn.title='ピンを設置';
+            // ハンドルもグレーに
+            const hw=document.querySelectorAll('#timelineArea .ev-wrap');
+            if(hw[idx]){const h=hw[idx].querySelector('.drag-handle');if(h)h.style.background='#c8c8c8';}
+            if(navigator.vibrate)navigator.vibrate(40);
+            showToast('📍 ピンを解除しました（長押し→解除）');
+            saveToFirestore();
+          },700);
+        });
+        pinBtn.addEventListener('pointerup',()=>{if(pinLongTimer){clearTimeout(pinLongTimer);pinLongTimer=null;}});
+        pinBtn.addEventListener('pointercancel',()=>{if(pinLongTimer){clearTimeout(pinLongTimer);pinLongTimer=null;}});
       })(i,pinColor);
     }
 
