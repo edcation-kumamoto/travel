@@ -8,8 +8,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<!-- v20260404-1 -->
-<title>旅のしおり</title>
+<!-- v2026.04.04-FIX-4 -->
+<title>旅のしおり v4</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -446,17 +446,17 @@ body::before{
 .list-toggle.open{background:#2E7D78;color:#fff}
 
 /* チェックリスト */
-.checklist{background:rgba(255,255,255,.72);border-radius:0 0 20px 22px;margin-top:-8px;margin-left:68px;padding:6px 10px 8px;display:none}
-.checklist.open{display:block;background:linear-gradient(160deg,#dbeafe 0%,#bfdbfe 100%);border-top:1.5px solid rgba(147,197,253,.45)}
-.check-item{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:.5px solid rgba(147,197,253,.35)}
+.checklist{background:rgba(255,255,255,.72);border-radius:0 0 20px 22px;margin-top:-8px;margin-left:42px;padding:6px 8px 8px;display:none;position:relative}
+.checklist.open{display:block;background:linear-gradient(160deg,#f8fafc 0%,#f1f5f9 100%);border-top:1.5px solid rgba(147,197,253,.45)}
+.check-item{display:flex;align-items:center;gap:4px;padding:6px 0;border-bottom:.5px solid rgba(147,197,253,.35)}
 .check-item:last-of-type{border-bottom:none}
 .check-box{width:22px;height:22px;border-radius:7px;border:1.5px solid #93c5fd;background:#fff;cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;transition:all .15s;touch-action:manipulation;font-size:13px}
 .check-box.checked{background:#3b82f6;border-color:#3b82f6;color:#fff}
-.check-text{font-size:13px;color:#1a1a1a;background:transparent;border:none;outline:none;flex:1;font-family:'M PLUS Rounded 1c',sans-serif}
+.check-text{font-size:13px;color:#1a1a1a;background:transparent;border:none;outline:none;flex:1;width:0;min-width:0;font-family:'M PLUS Rounded 1c',sans-serif}
 .check-text.done{text-decoration:line-through;color:#999}
-.check-del{width:20px;height:20px;border-radius:50%;border:none;background:transparent;color:#93c5fd;font-size:14px;cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;touch-action:manipulation}
+.check-del{width:22px;height:22px;border-radius:50%;border:1px solid #94a3b8;background:#fff;color:#64748b;font-size:14px;cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;touch-action:manipulation;box-shadow:0 1px 3px rgba(0,0,0,.1)}
 .add-check{display:flex;align-items:center;gap:8px;padding:6px 0;margin-top:2px}
-.add-check-input{font-size:13px;color:#666;background:transparent;border:none;outline:none;flex:1;font-family:'M PLUS Rounded 1c',sans-serif}
+.add-check-input{font-size:13px;color:#666;background:transparent;border:none;outline:none;flex:1;width:0;min-width:0;font-family:'M PLUS Rounded 1c',sans-serif}
 .add-check-input::placeholder{color:#93c5fd}
 
 /* ── 線路コネクター ── */
@@ -555,19 +555,18 @@ body::before{
 
 /* ── チェックリスト画像 ── */
 .check-img-btn{
-  width:22px;height:22px;border-radius:6px;border:none;
-  background:rgba(59,130,246,.15);color:#3b82f6;
-  font-size:13px;cursor:pointer;
-  display:flex;align-items:center;justify-content:center;
-  flex-shrink:0;touch-action:manipulation;
+  width:28px;height:24px;border-radius:6px;border:1px solid #3b82f6;
+  background:#fff;color:#3b82f6;
+  cursor:pointer;display:flex;align-items:center;justify-content:center;
+  flex-shrink:0;touch-action:manipulation;box-shadow:0 1px 3px rgba(0,0,0,.1);
 }
-.check-img-btn:active{background:rgba(59,130,246,.28)}
+.check-img-btn:active{background:#f0f7ff}
 .check-pin-btn{
-  width:20px;height:20px;border-radius:50%;border:none;
-  background:transparent;cursor:pointer;
+  width:24px;height:24px;border-radius:6px;border:1px solid #94a3b8;
+  background:#fff;cursor:pointer;
   display:flex;align-items:center;justify-content:center;
   flex-shrink:0;touch-action:manipulation;padding:0;
-  transition:transform .15s;
+  transition:transform .15s;box-shadow:0 1px 3px rgba(0,0,0,.1);
 }
 .check-pin-btn:active{transform:scale(.82)}
 .img-toggle-row{display:flex;align-items:center;gap:6px;padding:4px 0 2px 30px}
@@ -592,15 +591,21 @@ body::before{
   display:flex;align-items:center;justify-content:center;
   box-shadow:0 1px 4px rgba(0,0,0,.3);touch-action:manipulation;
 }
+.version-tag{
+  position:fixed;bottom:10px;left:10px;font-size:9px;color:rgba(0,0,0,0.25);
+  z-index:10001;pointer-events:none;font-family:'M PLUS Rounded 1c',sans-serif;
+}
 </style>
 </head>
 <body>
 
 <div id="ptr-indicator">↻ 離してリロード</div>
 <div class="app" id="app">
+  <div style="background:red;color:white;text-align:center;font-size:14px;padding:4px;font-weight:bold;z-index:99999;position:fixed;top:0;left:0;right:0" id="debug-banner">【修正中のファイルです: v2026.04.04-FIX-4】</div>
   <div class="app-head" id="appHead">
     <div class="trip-name-row collapsible">
       <input class="trip-name" id="tripName" value="旅のしおり" placeholder="旅行名">
+      <span style="font-size:9px;color:rgba(245,200,66,0.5);margin-left:-20px;margin-top:12px;z-index:5">v4</span>
     </div>
     <div class="date-nav">
       <button class="nav-btn" id="prevDay">‹</button>
@@ -696,6 +701,8 @@ body::before{
   </div>
 </div>
 
+<div class="version-tag">v2026.04.04-FIX-4</div>
+
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
@@ -709,6 +716,7 @@ const firebaseConfig = {
   appId: "1:410781369240:web:279933e3693841ae40a1ed"
 };
 const app = initializeApp(firebaseConfig);
+console.log("Tabi-Shiori Version: 2026.04.04-FIX-4");
 const db = getFirestore(app);
 
 // URLのハッシュを旅程IDとして使う（なければ新規作成）
@@ -1914,10 +1922,10 @@ function renderChecklist(evs,evIdx,paneId){
   const cl=document.getElementById('cl-'+pid+'-'+evIdx);if(!cl)return;
   const checks=evs[evIdx].checks;cl.innerHTML='';
 
+  const camIconHtml = `<svg width="15" height="13" viewBox="0 0 20 17" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M6.5 2L5.2 4H2C0.9 4 0 4.9 0 6V15C0 16.1 0.9 17 2 17H18C19.1 17 20 16.1 20 15V6C20 4.9 19.1 4 18 4H14.8L13.5 2H6.5ZM10 14C7.8 14 6 12.2 6 10C6 7.8 7.8 6 10 6C12.2 6 14 7.8 14 10C14 12.2 12.2 14 10 14Z" fill="currentColor"/></svg>`;
+
   checks.forEach((c,ci)=>{
-    // ── チェックアイテム行 ──
     const row=document.createElement('div');row.className='check-item';
-    // 行タップ → ピンへflyTo
     row.addEventListener('click',ev=>{
       if(ev.target.tagName==='BUTTON'||ev.target.tagName==='INPUT') return;
       const pin=days[curDay]?.events[evIdx]?.pin;
@@ -1943,11 +1951,6 @@ function renderChecklist(evs,evIdx,paneId){
     inp.value=c.text;
     inp.addEventListener('input',function(){c.text=this.value;saveToFirestore();});
     inp.addEventListener('keydown',function(ev){
-      if(ev.key==='Enter'){ev.preventDefault();if(this.value.trim()===''){checks.splice(ci,1);renderChecklist(evs,evIdx,pid);saveToFirestore();return;}const ai=cl.querySelector('.add-check-input');if(ai)ai.focus();}
-      if(ev.key==='Backspace'&&this.value===''){ev.preventDefault();checks.splice(ci,1);renderChecklist(evs,evIdx,pid);saveToFirestore();}
-    });
-    inp.addEventListener('blur',function(){if(this.value.trim()===''){checks.splice(ci,1);renderChecklist(evs,evIdx,pid);saveToFirestore();}});
-    inp.addEventListener('keydown',function(ev){
       if(ev.key==='Enter'){
         ev.preventDefault();
         if(this.value.trim()===''){checks.splice(ci,1);renderChecklist(evs,evIdx,pid);saveToFirestore();return;}
@@ -1961,7 +1964,6 @@ function renderChecklist(evs,evIdx,paneId){
       if(this.value.trim()===''){checks.splice(ci,1);renderChecklist(evs,evIdx,pid);saveToFirestore();}
     });
 
-    // ── 📍チェックアイテム用ピンボタン ──
     const cPinBtn=document.createElement('button');
     cPinBtn.className='check-pin-btn';
     const hasCPin=!!(c.pin&&c.pin.lat);
@@ -1969,39 +1971,29 @@ function renderChecklist(evs,evIdx,paneId){
     cPinBtn.innerHTML=makePinSvg(hasCPin?cPinColor:'#ccc',hasCPin?14:11);
     cPinBtn.title=hasCPin?'長押しで解除':'ピンを設置';
     (function(c_ref, cidx, col, btn){
-      // 長押し → ピン解除
       let cPinLong=null;
       btn.addEventListener('pointerdown',ev=>{
         if(!c_ref.pin) return;
         cPinLong=setTimeout(()=>{
-          cPinLong=null;
-          exitMapPlacingMode();
-          c_ref.pin=null;
+          cPinLong=null;exitMapPlacingMode();c_ref.pin=null;
           const mk=mapMarkers['c-'+evIdx+'-'+cidx];
           if(mk&&lMap){lMap.removeLayer(mk);delete mapMarkers['c-'+evIdx+'-'+cidx];}
-          btn.innerHTML=makePinSvg('#ccc',11);
-          btn.title='ピンを設置';
+          btn.innerHTML=makePinSvg('#ccc',11);btn.title='ピンを設置';
           if(navigator.vibrate)navigator.vibrate([30,20,60]);
-          showToast('📍 ピンを解除しました');
-          saveToFirestore();
+          showToast('📍 ピンを解除しました');saveToFirestore();
         },900);
       });
       btn.addEventListener('pointerup',()=>{if(cPinLong){clearTimeout(cPinLong);cPinLong=null;}});
       btn.addEventListener('pointercancel',()=>{if(cPinLong){clearTimeout(cPinLong);cPinLong=null;}});
-      // タップ → 選択開始 or キャンセル
       btn.addEventListener('click',ev=>{
         ev.stopPropagation();
-        // すでに選択中ならキャンセル
         if(_placingPinBtn===btn){exitMapPlacingMode();return;}
-        // 地図未初期化ならマップを開く
         if(!lMap){initMapIfNeeded();}
         setPinBtnSelecting(btn);
-        // チェックアイテム用として enterMapPlacingMode
         enterMapPlacingMode(evIdx, col, {
           isCheck: true,
           checkRef: c_ref,
           onPlace: (latlng)=>{
-            // マーカー追加
             const icon2=L.divIcon({
               className:'lf-cpin-'+evIdx+'-'+cidx,
               html:`<div style="width:16px;height:16px;background:${col};border:2px solid #fff;border-radius:50%;box-shadow:0 2px 6px rgba(0,0,0,.4)"></div>`,
@@ -2012,17 +2004,15 @@ function renderChecklist(evs,evIdx,paneId){
             const oldKey='c-'+evIdx+'-'+cidx;
             if(mapMarkers[oldKey]&&lMap){lMap.removeLayer(mapMarkers[oldKey]);}
             mapMarkers[oldKey]=cm;
-            btn.innerHTML=makePinSvg(col,14);
-            btn.title='長押しで解除';
+            btn.innerHTML=makePinSvg(col,14);btn.title='長押しで解除';
           }
         });
       });
     })(c, ci, cPinColor, cPinBtn);
 
-    // ── 📷画像ボタン ──
     const camBtn=document.createElement('button');
     camBtn.className='check-img-btn';
-    camBtn.textContent='📷';
+    camBtn.innerHTML=camIconHtml;
     camBtn.addEventListener('click',e=>{
       e.stopPropagation();
       const fileIn=document.createElement('input');
@@ -2030,16 +2020,13 @@ function renderChecklist(evs,evIdx,paneId){
       document.body.appendChild(fileIn);
       fileIn.addEventListener('change',async()=>{
         if(!fileIn.files[0]){fileIn.remove();return;}
-        camBtn.textContent='⏳';
+        camBtn.innerHTML='⏳';
         try{
           const b64=await readFileAsBase64(fileIn.files[0]);
-          c.img=b64;
-          fileIn.remove();
-          renderChecklist(evs,evIdx,pid);
-          saveToFirestore();
+          c.img=b64;fileIn.remove();
+          renderChecklist(evs,evIdx,pid);saveToFirestore();
         }catch(err){
-          camBtn.textContent='📷';
-          fileIn.remove();
+          camBtn.innerHTML=camIconHtml;fileIn.remove();
           showToast('画像の読み込みに失敗しました');
         }
       });
@@ -2053,26 +2040,19 @@ function renderChecklist(evs,evIdx,paneId){
     row.appendChild(box);row.appendChild(inp);row.appendChild(cPinBtn);row.appendChild(camBtn);row.appendChild(del);
     cl.appendChild(row);
 
-    // ── 画像がある場合: Vボタン行＋展開エリア ──
     if(c.img){
       const toggleRow=document.createElement('div');toggleRow.className='img-toggle-row';
-
       const vBtn=document.createElement('button');
       vBtn.className='img-v-btn'+(c._imgOpen?' open':'');
       vBtn.textContent='▼';
-
       const lbl=document.createElement('span');
       lbl.className='img-toggle-label';
       lbl.textContent=(c._imgOpen?'▲':'▼')+' 写真1枚';
-
       const expand=document.createElement('div');
       expand.className='img-expand'+(c._imgOpen?' open':'');
-
       const inner=document.createElement('div');inner.className='img-expand-inner';
-
       const imgEl=document.createElement('img');
       imgEl.src=c.img;imgEl.alt='添付写真';
-
       const delImgBtn=document.createElement('button');
       delImgBtn.className='img-del-btn';delImgBtn.textContent='✕';
       delImgBtn.addEventListener('click',e=>{
@@ -2080,7 +2060,6 @@ function renderChecklist(evs,evIdx,paneId){
         c.img=null;c._imgOpen=false;
         renderChecklist(evs,evIdx,pid);saveToFirestore();
       });
-
       vBtn.addEventListener('click',e=>{
         e.stopPropagation();
         c._imgOpen=!c._imgOpen;
@@ -2089,7 +2068,6 @@ function renderChecklist(evs,evIdx,paneId){
         lbl.textContent=(c._imgOpen?'▲':'▼')+' 写真1枚';
       });
       lbl.addEventListener('click',()=>vBtn.click());
-
       inner.appendChild(imgEl);inner.appendChild(delImgBtn);
       expand.appendChild(inner);
       toggleRow.appendChild(vBtn);toggleRow.appendChild(lbl);
@@ -2098,25 +2076,46 @@ function renderChecklist(evs,evIdx,paneId){
     }
   });
 
-  // ── ＋追加行 ──
   const ar=document.createElement('div');ar.className='add-check';
   const plus=document.createElement('span');
   plus.textContent='＋';
   plus.style.cssText='font-size:14px;color:#3b82f6;flex-shrink:0;font-family:"M PLUS Rounded 1c",sans-serif';
   const ai=document.createElement('input');ai.className='add-check-input';ai.placeholder='やることを追加';
+  
+  const camAdd=document.createElement('button');
+  camAdd.className='check-img-btn';
+  camAdd.innerHTML=camIconHtml;
+  camAdd.style.background='transparent';
+  camAdd.addEventListener('click', ()=>{
+    const fi=document.createElement('input');fi.type='file';fi.accept='image/*';
+    fi.onchange=async e=>{
+      const file=e.target.files[0]; if(!file)return;
+      try {
+        const b64=await readFileAsBase64(file);
+        checks.push({text: ai.value.trim() || '追加写真', done: false, img: b64});
+        ai.value='';
+        renderChecklist(evs,evIdx,pid);saveToFirestore();
+      } catch(err) {
+        showToast('画像の読み込みに失敗しました');
+      } finally {
+        fi.remove();
+      }
+    };
+    fi.click();
+  });
+
   function commitAddCheck(){
     const val=ai.value.trim();if(!val)return;
     checks.push({text:val,done:false,img:null});
     ai.value='';
-    renderChecklist(evs,evIdx,pid);
-    saveToFirestore();
+    renderChecklist(evs,evIdx,pid);saveToFirestore();
     setTimeout(()=>{
       const inputs=cl.querySelectorAll('.add-check-input');
       if(inputs.length)inputs[inputs.length-1].focus();
     },30);
   }
   ai.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();commitAddCheck();}});
-  ar.appendChild(plus);ar.appendChild(ai);cl.appendChild(ar);
+  ar.appendChild(plus);ar.appendChild(ai);ar.appendChild(camAdd);cl.appendChild(ar);
 }
 
 // ════════════════════════════════════════════════════════════
