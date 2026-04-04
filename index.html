@@ -2019,10 +2019,10 @@ function renderChecklist(evs,evIdx,paneId){
       });
     })(c, ci, cPinColor, cPinBtn);
 
-    // ── 📷画像ボタン ──
+    // ── 📷画像ボタン (SVG版) ──
     const camBtn=document.createElement('button');
     camBtn.className='check-img-btn';
-    camBtn.textContent='📷';
+    camBtn.innerHTML=makeCamSvg('#3b82f6',14);
     camBtn.addEventListener('click',e=>{
       e.stopPropagation();
       const fileIn=document.createElement('input');
@@ -2030,7 +2030,7 @@ function renderChecklist(evs,evIdx,paneId){
       document.body.appendChild(fileIn);
       fileIn.addEventListener('change',async()=>{
         if(!fileIn.files[0]){fileIn.remove();return;}
-        camBtn.textContent='⏳';
+        camBtn.innerHTML='⏳';
         try{
           const b64=await readFileAsBase64(fileIn.files[0]);
           c.img=b64;
@@ -2038,7 +2038,7 @@ function renderChecklist(evs,evIdx,paneId){
           renderChecklist(evs,evIdx,pid);
           saveToFirestore();
         }catch(err){
-          camBtn.textContent='📷';
+          camBtn.innerHTML=makeCamSvg('#3b82f6',14);
           fileIn.remove();
           showToast('画像の読み込みに失敗しました');
         }
@@ -2114,10 +2114,10 @@ function renderChecklist(evs,evIdx,paneId){
     },30);
   }
 
-  // ── ＋📷ボタン ──
+  // ── ＋📷ボタン (SVG版) ──
   const aCam=document.createElement('button');
   aCam.className='check-img-btn';
-  aCam.textContent='📷';
+  aCam.innerHTML=makeCamSvg('#3b82f6',14);
   aCam.style.marginLeft='auto';
   aCam.addEventListener('click',e=>{
     e.stopPropagation();
@@ -2126,13 +2126,13 @@ function renderChecklist(evs,evIdx,paneId){
     document.body.appendChild(fileIn);
     fileIn.addEventListener('change',async()=>{
       if(!fileIn.files[0]){fileIn.remove();return;}
-      aCam.textContent='⏳';
+      aCam.innerHTML='⏳';
       try{
         const b64=await readFileAsBase64(fileIn.files[0]);
         fileIn.remove();
         commitAddCheck(b64);
       }catch(err){
-        aCam.textContent='📷';fileIn.remove();
+        aCam.innerHTML=makeCamSvg('#3b82f6',14);fileIn.remove();
         showToast('画像の読み込みに失敗しました');
       }
     });
