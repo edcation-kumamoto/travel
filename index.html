@@ -8,8 +8,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<!-- v20260330-5 -->
+<!-- v20260404-1 -->
 <title>旅のしおり</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;500;700;900&display=swap" rel="stylesheet">
@@ -327,8 +328,85 @@ body::before{
 .ev-wrap:nth-child(4n+3) .ev-card{border-radius:28px 24px 30px 20px / 20px 30px 24px 28px}
 .ev-wrap:nth-child(4n+0) .ev-card{border-radius:24px 28px 22px 32px / 32px 20px 28px 22px}
 
-.drag-handle{font-size:13px;color:#c8c8c8;cursor:grab;line-height:1;flex-shrink:0;padding:4px 2px;touch-action:none}
+.drag-handle{
+  width:22px;height:22px;border-radius:50%;
+  cursor:grab;line-height:1;flex-shrink:0;
+  touch-action:none;
+  display:flex;align-items:center;justify-content:center;
+  font-size:9px;font-weight:900;color:rgba(255,255,255,.9);
+  border:2px solid rgba(255,255,255,.6);
+  box-shadow:0 1px 5px rgba(0,0,0,.25);
+  /* background は JS でイベントごとに設定 */
+}
 .drag-handle:active{cursor:grabbing}
+@keyframes handle-pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.7;transform:scale(1.18)}}
+.ev-wrap.jiggle .drag-handle{animation:handle-pulse 1s ease-in-out infinite}
+
+/* ── 📍ボタン（SVGピン） ── */
+.map-pin-btn{
+  width:26px;height:26px;border-radius:50%;border:none;
+  background:transparent;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  flex-shrink:0;touch-action:manipulation;
+  transition:transform .15s;padding:0;
+}
+.map-pin-btn:active{transform:scale(.85)}
+
+/* ── マップ PiP ── */
+.map-pip{
+  position:fixed;bottom:20px;right:14px;
+  width:80px;height:80px;
+  border-radius:14px;overflow:hidden;
+  box-shadow:0 4px 24px rgba(0,0,0,.35);
+  z-index:500;background:#b8dbd9;cursor:pointer;
+  transition:width .4s cubic-bezier(.4,0,.2,1),
+             height .4s cubic-bezier(.4,0,.2,1),
+             border-radius .4s cubic-bezier(.4,0,.2,1);
+}
+.map-pip.size-1{width:55vw;height:80px}
+.map-pip.size-2{width:calc(100vw - 28px);height:50vh;border-radius:18px}
+.map-pip.placing{outline:3px solid #F5C842;outline-offset:-3px;cursor:crosshair}
+#leafletMap{width:100%;height:100%;position:absolute;top:0;left:0}
+.map-hint{position:absolute;bottom:5px;left:6px;background:rgba(0,0,0,.52);color:#fff;font-size:8px;padding:2px 7px;border-radius:8px;pointer-events:none;z-index:10;white-space:nowrap}
+.place-hint{position:absolute;top:7px;left:50%;transform:translateX(-50%);background:rgba(245,200,66,.95);color:#5a4500;font-size:10px;font-weight:700;padding:3px 10px;border-radius:10px;pointer-events:none;z-index:11;white-space:nowrap;display:none}
+.pip-pal{position:absolute;top:5px;right:5px;background:rgba(255,255,255,.88);border:none;border-radius:8px;width:22px;height:22px;font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:11;box-shadow:0 1px 4px rgba(0,0,0,.25);touch-action:manipulation}
+
+/* ピンパルスアニメ */
+@keyframes pinPulse{0%,100%{transform:rotate(-45deg) scale(1)}50%{transform:rotate(-45deg) scale(1.5)}}
+.pin-active div{animation:pinPulse .45s ease-in-out 2}
+
+/* スタイルピッカー */
+.style-bar{position:fixed;bottom:148px;right:14px;display:flex;flex-direction:column;gap:5px;z-index:501;opacity:0;pointer-events:none;transition:opacity .2s}
+.style-bar.show{opacity:1;pointer-events:auto}
+.style-chip{padding:5px 11px;background:#fff;border:2px solid #ccc;border-radius:20px;font-size:11px;font-weight:700;cursor:pointer;color:#444;white-space:nowrap;font-family:'M PLUS Rounded 1c',sans-serif;box-shadow:0 2px 8px rgba(0,0,0,.15);touch-action:manipulation}
+.style-chip.active{border-color:#2E7D78;background:#2E7D78;color:#fff}
+
+/* 検索バー */
+.map-search{
+  position:fixed;bottom:108px;right:14px;
+  display:flex;align-items:center;
+  z-index:501;opacity:0;pointer-events:none;
+  transition:opacity .2s;
+  background:#fff;border-radius:20px;
+  box-shadow:0 2px 12px rgba(0,0,0,.2);
+  overflow:hidden;
+}
+.map-search.show{opacity:1;pointer-events:auto}
+.map-search input{
+  border:none;outline:none;padding:7px 12px;
+  font-family:'M PLUS Rounded 1c',sans-serif;
+  font-size:12px;color:#333;width:150px;background:transparent;
+  -webkit-user-select:text;user-select:text;
+}
+.map-search input::placeholder{color:#aaa}
+.map-search button{border:none;background:#2E7D78;color:#fff;padding:7px 10px;cursor:pointer;font-size:12px;touch-action:manipulation}
+
+/* Leaflet上書き */
+.leaflet-control-zoom{display:none!important}
+.leaflet-control-attribution{font-size:7px!important;opacity:.7}
+.leaflet-popup-content{font-family:'M PLUS Rounded 1c',sans-serif;font-size:12px;font-weight:700;margin:8px 12px}
+.leaflet-popup-content-wrapper{border-radius:12px!important;box-shadow:0 4px 16px rgba(0,0,0,.2)!important}
+.leaflet-popup-close-button{display:none!important}
 .ev-name{font-size:14px;font-weight:500;color:#1a1a1a;background:transparent;border:none;outline:none;flex:1;font-family:'M PLUS Rounded 1c',sans-serif;min-width:0}
 .ev-name::placeholder{color:#ccc;font-weight:400}
 .list-toggle{width:26px;height:26px;border-radius:50%;border:none;background:rgba(46,125,120,.1);color:#2E7D78;font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;touch-action:manipulation;font-weight:700;transition:all .15s}
@@ -441,6 +519,38 @@ body::before{
 .tp-ok{padding:8px 20px;border-radius:10px;border:none;background:#2E7D78;color:#fff;font-size:12px;font-family:'M PLUS Rounded 1c',sans-serif;cursor:pointer;font-weight:700}
 .dur-lock{padding:5px 12px;border-radius:10px;border:.5px solid #e0e0e0;background:transparent;font-size:12px;font-family:'M PLUS Rounded 1c',sans-serif;cursor:pointer;color:#888;touch-action:manipulation}
 .dur-lock.on{background:rgba(46,125,120,.1);border-color:rgba(46,125,120,.45);color:#2E7D78;font-weight:700}
+
+/* ── チェックリスト画像 ── */
+.check-img-btn{
+  width:22px;height:22px;border-radius:6px;border:none;
+  background:rgba(59,130,246,.15);color:#3b82f6;
+  font-size:13px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  flex-shrink:0;touch-action:manipulation;
+}
+.check-img-btn:active{background:rgba(59,130,246,.28)}
+.img-toggle-row{display:flex;align-items:center;gap:6px;padding:4px 0 2px 30px}
+.img-v-btn{
+  width:22px;height:22px;border-radius:6px;border:none;
+  background:rgba(59,130,246,.15);color:#3b82f6;
+  font-size:11px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  transition:transform .2s;flex-shrink:0;touch-action:manipulation;
+}
+.img-v-btn.open{transform:rotate(180deg)}
+.img-toggle-label{font-size:11px;color:#3b82f6;font-weight:700;cursor:pointer}
+.img-expand{max-height:0;overflow:hidden;transition:max-height .3s cubic-bezier(.4,0,.2,1);padding:0 0 0 30px}
+.img-expand.open{max-height:400px}
+.img-expand-inner{position:relative;display:inline-block;margin:4px 0;max-width:100%}
+.img-expand-inner img{display:block;max-width:100%;max-height:260px;border-radius:10px;border:1.5px solid rgba(147,197,253,.5);object-fit:contain}
+.img-del-btn{
+  position:absolute;top:4px;right:4px;
+  width:22px;height:22px;border-radius:50%;
+  border:2px solid #fff;background:#ff3b30;color:#fff;
+  font-size:12px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  box-shadow:0 1px 4px rgba(0,0,0,.3);touch-action:manipulation;
+}
 </style>
 </head>
 <body>
@@ -488,6 +598,29 @@ body::before{
       <button class="del-day-popup-btn delete" id="delDayConfirm">削除</button>
     </div>
   </div>
+</div>
+
+<!-- 検索バー -->
+<div class="map-search" id="mapSearch">
+  <input type="text" id="searchInput" placeholder="場所を検索…"/>
+  <button id="searchBtn">🔍</button>
+</div>
+
+<!-- スタイルピッカー -->
+<div class="style-bar" id="styleBar">
+  <button class="style-chip active" data-style="voyager" onclick="changeMapStyle(this)">🎨 Voyager</button>
+  <button class="style-chip" data-style="positron" onclick="changeMapStyle(this)">⬜ Positron</button>
+  <button class="style-chip" data-style="dark" onclick="changeMapStyle(this)">🌑 Dark</button>
+  <button class="style-chip" data-style="osm" onclick="changeMapStyle(this)">🗺 OSM</button>
+  <button class="style-chip" data-style="topo" onclick="changeMapStyle(this)">🏔 地形図</button>
+</div>
+
+<!-- マップPiP -->
+<div class="map-pip" id="mapPip">
+  <div id="leafletMap"></div>
+  <button class="pip-pal" id="palBtn">🎨</button>
+  <div class="map-hint" id="mapHint">タップで拡大</div>
+  <div class="place-hint" id="placeHint">📍 地図をタップしてピンを置く</div>
 </div>
 
 <div class="dur-picker" id="durPicker">
@@ -548,6 +681,24 @@ let days=[];
 let curDay=0;
 let dragSrc=null;
 let durPickerIdx=null,timePopupIdx=null,tpFixed=false,durLocked=false;
+
+// ── マップ関連 ──
+const PIN_COLORS=['#e74c3c','#3b82f6','#f59e0b','#10b981','#8b5cf6','#ec4899'];
+const MAP_TILES={
+  voyager: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+  positron:'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
+  dark:    'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+  osm:     'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+  topo:    'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
+};
+const MAP_DEFAULT_CENTER=[35.685,139.752];
+const PIP_STATES=[
+  {cls:'',       hint:'タップで拡大',     zoom:11},
+  {cls:'size-1', hint:'もう一度で大きく', zoom:11},
+  {cls:'size-2', hint:'タップで最小化',   zoom:11},
+];
+let lMap=null, currentTile=null, mapMarkers={};
+let mapPipState=0, mapPlacingIdx=null, mapPickerOpen=false, mapActiveEvIdx=null;
 
 function mkEvent(name,fixedTime,dur){return{id:nextId++,name,fixedTime,dur,durLocked:false,checks:[],open:false};}
 
@@ -613,6 +764,7 @@ function applyRemoteSnap(snap){
     days.forEach(d=>d.events.forEach(e=>{if(e.id>=nextId)nextId=e.id+1;}));
     curDay = Math.min(curDay, Math.max(0, days.length-1));
     renderHeader();renderTimeline();
+    initMapIfNeeded(); // ← マップ初期化
     return;
   }
 
@@ -663,6 +815,7 @@ onSnapshot(doc(db,'trips',tripId), snap => {
     }];
     renderHeader();renderTimeline();
     saveToFirestore();
+    initMapIfNeeded(); // ← マップ初期化
     return;
   }
 
@@ -1676,46 +1829,442 @@ function toggleList(evs,idx,paneId){
   if(btn){btn.className='list-toggle'+(evs[idx].open?' open':'');btn.textContent=evs[idx].open?'−':'≡';}
   saveToFirestore();
 }
+// ── 画像リサイズ→base64変換 ──
+async function readFileAsBase64(file, maxPx=800){
+  return new Promise((resolve,reject)=>{
+    const reader=new FileReader();
+    reader.onload=e=>{
+      const img=new Image();
+      img.onload=()=>{
+        let {width:w,height:h}=img;
+        if(w>maxPx||h>maxPx){
+          if(w>h){h=Math.round(h*maxPx/w);w=maxPx;}
+          else{w=Math.round(w*maxPx/h);h=maxPx;}
+        }
+        const canvas=document.createElement('canvas');
+        canvas.width=w;canvas.height=h;
+        canvas.getContext('2d').drawImage(img,0,0,w,h);
+        resolve(canvas.toDataURL('image/jpeg',0.82));
+      };
+      img.onerror=reject;
+      img.src=e.target.result;
+    };
+    reader.onerror=reject;
+    reader.readAsDataURL(file);
+  });
+}
+
 function renderChecklist(evs,evIdx,paneId){
   const pid=paneId||'main';
   const cl=document.getElementById('cl-'+pid+'-'+evIdx);if(!cl)return;
   const checks=evs[evIdx].checks;cl.innerHTML='';
+
   checks.forEach((c,ci)=>{
+    // ── チェックアイテム行 ──
     const row=document.createElement('div');row.className='check-item';
-    const box=document.createElement('div');box.className='check-box'+(c.done?' checked':'');
+    // 行タップ → ピンへflyTo
+    row.addEventListener('click',ev=>{
+      if(ev.target.tagName==='BUTTON'||ev.target.tagName==='INPUT') return;
+      const pin=days[curDay]?.events[evIdx]?.pin;
+      if(pin&&lMap){
+        if(mapPipState===0){mapPipState=1;applyMapPipState();}
+        setTimeout(()=>lMap.flyTo([pin.lat,pin.lng],14,{duration:.9}),mapPipState>0?0:420);
+      }
+    });
+
+    const box=document.createElement('div');
+    box.className='check-box'+(c.done?' checked':'');
     box.textContent=c.done?'✓':'';
-    box.addEventListener('click',()=>{c.done=!c.done;box.className='check-box'+(c.done?' checked':'');box.textContent=c.done?'✓':'';inp.className='check-text'+(c.done?' done':'');saveToFirestore();});
-    const inp=document.createElement('input');inp.className='check-text'+(c.done?' done':'');inp.value=c.text;
+    box.addEventListener('click',()=>{
+      c.done=!c.done;
+      box.className='check-box'+(c.done?' checked':'');
+      box.textContent=c.done?'✓':'';
+      inp.className='check-text'+(c.done?' done':'');
+      saveToFirestore();
+    });
+
+    const inp=document.createElement('input');
+    inp.className='check-text'+(c.done?' done':'');
+    inp.value=c.text;
     inp.addEventListener('input',function(){c.text=this.value;saveToFirestore();});
-    const del=document.createElement('button');del.className='check-del';del.textContent='×';
-    del.addEventListener('click',()=>{checks.splice(ci,1);renderChecklist(evs,evIdx);saveToFirestore();});
-    row.appendChild(box);row.appendChild(inp);row.appendChild(del);cl.appendChild(row);
+
+    // 📷ボタン
+    const camBtn=document.createElement('button');
+    camBtn.className='check-img-btn';
+    camBtn.textContent='📷';
+    camBtn.addEventListener('click',e=>{
+      e.stopPropagation();
+      const fileIn=document.createElement('input');
+      fileIn.type='file';fileIn.accept='image/*';
+      fileIn.addEventListener('change',async()=>{
+        if(!fileIn.files[0])return;
+        camBtn.textContent='⏳';
+        try{
+          const b64=await readFileAsBase64(fileIn.files[0]);
+          c.img=b64;
+          renderChecklist(evs,evIdx,pid);
+          saveToFirestore();
+        }catch(err){
+          camBtn.textContent='📷';
+          showToast('画像の読み込みに失敗しました');
+        }
+      });
+      fileIn.click();
+    });
+
+    const del=document.createElement('button');
+    del.className='check-del';del.textContent='×';
+    del.addEventListener('click',()=>{checks.splice(ci,1);renderChecklist(evs,evIdx,pid);saveToFirestore();});
+
+    row.appendChild(box);row.appendChild(inp);row.appendChild(camBtn);row.appendChild(del);
+    cl.appendChild(row);
+
+    // ── 画像がある場合: Vボタン行＋展開エリア ──
+    if(c.img){
+      const toggleRow=document.createElement('div');toggleRow.className='img-toggle-row';
+
+      const vBtn=document.createElement('button');
+      vBtn.className='img-v-btn'+(c._imgOpen?' open':'');
+      vBtn.textContent='▼';
+
+      const lbl=document.createElement('span');
+      lbl.className='img-toggle-label';
+      lbl.textContent=(c._imgOpen?'▲':'▼')+' 写真1枚';
+
+      const expand=document.createElement('div');
+      expand.className='img-expand'+(c._imgOpen?' open':'');
+
+      const inner=document.createElement('div');inner.className='img-expand-inner';
+
+      const imgEl=document.createElement('img');
+      imgEl.src=c.img;imgEl.alt='添付写真';
+
+      const delImgBtn=document.createElement('button');
+      delImgBtn.className='img-del-btn';delImgBtn.textContent='✕';
+      delImgBtn.addEventListener('click',e=>{
+        e.stopPropagation();
+        c.img=null;c._imgOpen=false;
+        renderChecklist(evs,evIdx,pid);saveToFirestore();
+      });
+
+      vBtn.addEventListener('click',e=>{
+        e.stopPropagation();
+        c._imgOpen=!c._imgOpen;
+        vBtn.className='img-v-btn'+(c._imgOpen?' open':'');
+        expand.className='img-expand'+(c._imgOpen?' open':'');
+        lbl.textContent=(c._imgOpen?'▲':'▼')+' 写真1枚';
+      });
+      lbl.addEventListener('click',()=>vBtn.click());
+
+      inner.appendChild(imgEl);inner.appendChild(delImgBtn);
+      expand.appendChild(inner);
+      toggleRow.appendChild(vBtn);toggleRow.appendChild(lbl);
+      cl.appendChild(toggleRow);
+      cl.appendChild(expand);
+    }
   });
+
+  // ── ＋追加行 ──
   const ar=document.createElement('div');ar.className='add-check';
-  const plus=document.createElement('span');plus.textContent='＋';plus.style.cssText='font-size:14px;color:#3b82f6;flex-shrink:0;font-family:"M PLUS Rounded 1c",sans-serif';
+  const plus=document.createElement('span');
+  plus.textContent='＋';
+  plus.style.cssText='font-size:14px;color:#3b82f6;flex-shrink:0;font-family:"M PLUS Rounded 1c",sans-serif';
   const ai=document.createElement('input');ai.className='add-check-input';ai.placeholder='やることを追加';
   function commitAddCheck(){
-    const val=ai.value.trim();
-    if(!val)return;
-    checks.push({text:val,done:false});
+    const val=ai.value.trim();if(!val)return;
+    checks.push({text:val,done:false,img:null});
     ai.value='';
-    renderChecklist(evs,evIdx);
+    renderChecklist(evs,evIdx,pid);
     saveToFirestore();
-    // フォーカスを新しい入力欄に戻す
     setTimeout(()=>{
       const inputs=cl.querySelectorAll('.add-check-input');
       if(inputs.length)inputs[inputs.length-1].focus();
     },30);
   }
   ai.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();commitAddCheck();}});
-  // blurで追加はフォーカス移動で誤爆するので削除→Enterのみにする
   ar.appendChild(plus);ar.appendChild(ai);cl.appendChild(ar);
+}
+
+// ════════════════════════════════════════════════════════════
+//  マップ機能
+// ════════════════════════════════════════════════════════════
+
+function makePinSvg(color,size){
+  size=size||18;
+  const h=Math.round(size*36/28);
+  return `<svg width="${size}" height="${h}" viewBox="0 0 28 36" xmlns="http://www.w3.org/2000/svg">
+    <path d="M14 0C6.27 0 0 6.27 0 14c0 10.5 14 22 14 22S28 24.5 28 14C28 6.27 21.73 0 14 0z"
+      fill="${color}" stroke="#fff" stroke-width="2.5"/>
+    <circle cx="14" cy="14" r="5.5" fill="#fff" opacity=".88"/>
+  </svg>`;
+}
+
+function initMapIfNeeded(){
+  // Leaflet が未ロードなら動的にロード
+  if(typeof L==='undefined'){
+    const s=document.createElement('script');
+    s.src='https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js';
+    s.onload=initLeafletMap;
+    s.onerror=()=>console.warn('Leaflet読み込み失敗');
+    document.head.appendChild(s);
+  } else {
+    initLeafletMap();
+  }
+}
+
+function initLeafletMap(){
+  if(lMap) return; // 二重初期化防止
+
+  // localStorageから前回位置を復元
+  let initC=MAP_DEFAULT_CENTER, initZ=11;
+  try{
+    const saved=JSON.parse(localStorage.getItem('mapPos'));
+    if(saved){initC=[saved.lat,saved.lng];initZ=saved.zoom;}
+  }catch(e){}
+
+  lMap=L.map('leafletMap',{center:initC,zoom:initZ,zoomControl:false,attributionControl:true});
+  currentTile=L.tileLayer(MAP_TILES.voyager,{maxZoom:19,subdomains:'abcd'}).addTo(lMap);
+  setTimeout(()=>lMap.invalidateSize(),120);
+
+  // 移動のたびにlocalStorageへ保存
+  lMap.on('moveend zoomend',()=>{
+    try{
+      const c=lMap.getCenter();
+      localStorage.setItem('mapPos',JSON.stringify({lat:c.lat,lng:c.lng,zoom:lMap.getZoom()}));
+    }catch(e){}
+  });
+
+  // 地図クリック = ピン設置
+  lMap.on('click',e=>{
+    if(mapPlacingIdx===null)return;
+    const idx=mapPlacingIdx;
+    const ev=days[curDay]?.events[idx];
+    if(!ev) return;
+    ev.pin={lat:e.latlng.lat,lng:e.latlng.lng};
+    addMapMarker(idx,e.latlng.lat,e.latlng.lng);
+    exitMapPlacingMode();
+    // 📍ボタン更新（renderTimelineIntoで生成されたev-wrapから探す）
+    const color=PIN_COLORS[idx%PIN_COLORS.length];
+    const evWraps=document.querySelectorAll('#timelineArea .ev-wrap');
+    if(evWraps[idx]){
+      const pb=evWraps[idx].querySelector('.map-pin-btn');
+      if(pb) pb.innerHTML=makePinSvg(color,18);
+    }
+    saveToFirestore();
+  });
+
+  // 既存ピンを配置
+  const evs=getEvents();
+  evs.forEach((ev,i)=>{if(ev.pin)addMapMarker(i,ev.pin.lat,ev.pin.lng);});
+
+  initMapPip();
+  initMapSearch();
+}
+
+function addMapMarker(evIdx,lat,lng){
+  if(mapMarkers[evIdx])lMap.removeLayer(mapMarkers[evIdx]);
+  const color=PIN_COLORS[evIdx%PIN_COLORS.length];
+  const icon=L.divIcon({
+    className:'lf-pin-'+evIdx,
+    html:`<div style="width:22px;height:22px;background:${color};border:2.5px solid #fff;border-radius:50% 50% 50% 0;transform:rotate(-45deg);box-shadow:0 2px 8px rgba(0,0,0,.4)"></div>`,
+    iconSize:[22,22],iconAnchor:[11,22],popupAnchor:[0,-24],
+  });
+  const m=L.marker([lat,lng],{icon}).addTo(lMap);
+  const evs=getEvents();
+  m.bindPopup(
+    `<div style="font-family:'M PLUS Rounded 1c',sans-serif;white-space:nowrap">
+      <span style="display:inline-block;width:8px;height:8px;background:${color};border-radius:50%;margin-right:5px;vertical-align:middle"></span>
+      ${evs[evIdx]?.name||''}
+    </div>`,
+    {closeButton:false,maxWidth:220}
+  );
+  m.on('click',()=>onMapPinClick(evIdx));
+  mapMarkers[evIdx]=m;
+}
+
+function activateMapPin(evIdx){
+  const color=PIN_COLORS[evIdx%PIN_COLORS.length];
+  if(mapMarkers[evIdx]){
+    const aIcon=L.divIcon({
+      className:'lf-pin-'+evIdx,
+      html:`<div style="width:26px;height:26px;background:#fff;border:3.5px solid ${color};border-radius:50% 50% 50% 0;transform:rotate(-45deg);box-shadow:0 2px 10px rgba(0,0,0,.5)"></div>`,
+      iconSize:[26,26],iconAnchor:[13,26],popupAnchor:[0,-28],
+    });
+    mapMarkers[evIdx].setIcon(aIcon);
+  }
+  const evs=getEvents();
+  evs[evIdx].open=true;
+  const cl=document.getElementById('cl-main-'+evIdx);
+  const btn=document.getElementById('lt-main-'+evIdx);
+  if(cl)cl.className='checklist open';
+  if(btn){btn.className='list-toggle open';btn.textContent='−';}
+  // スクロール
+  const wrapEls=document.querySelectorAll('#timelineArea .ev-wrap');
+  if(wrapEls[evIdx])wrapEls[evIdx].scrollIntoView({behavior:'smooth',block:'center'});
+  // flyTo
+  const pin=evs[evIdx]?.pin;
+  if(pin&&lMap){
+    if(mapPipState===0){mapPipState=2;applyMapPipState();}
+    setTimeout(()=>{
+      lMap.flyTo([pin.lat,pin.lng],14,{duration:1});
+      setTimeout(()=>{if(mapMarkers[evIdx])mapMarkers[evIdx].openPopup();},1100);
+    },mapPipState>0?0:450);
+  }
+  mapActiveEvIdx=evIdx;
+}
+
+function deactivateMapPin(evIdx){
+  const color=PIN_COLORS[evIdx%PIN_COLORS.length];
+  if(mapMarkers[evIdx]){
+    const nIcon=L.divIcon({
+      className:'lf-pin-'+evIdx,
+      html:`<div style="width:22px;height:22px;background:${color};border:2.5px solid #fff;border-radius:50% 50% 50% 0;transform:rotate(-45deg);box-shadow:0 2px 8px rgba(0,0,0,.4)"></div>`,
+      iconSize:[22,22],iconAnchor:[11,22],popupAnchor:[0,-24],
+    });
+    mapMarkers[evIdx].setIcon(nIcon);
+    if(mapMarkers[evIdx].isPopupOpen())mapMarkers[evIdx].closePopup();
+  }
+  const evs=getEvents();
+  evs[evIdx].open=false;
+  const cl=document.getElementById('cl-main-'+evIdx);
+  const btn=document.getElementById('lt-main-'+evIdx);
+  if(cl)cl.className='checklist';
+  if(btn){btn.className='list-toggle';btn.textContent='≡';}
+  mapActiveEvIdx=null;
+}
+
+function onMapPinClick(evIdx){
+  if(mapActiveEvIdx===evIdx){
+    deactivateMapPin(evIdx);
+  } else {
+    if(mapActiveEvIdx!==null)deactivateMapPin(mapActiveEvIdx);
+    activateMapPin(evIdx);
+  }
+}
+
+function enterMapPlacingMode(evIdx,color){
+  mapPlacingIdx=evIdx;
+  mapPipState=2; applyMapPipState();
+  setTimeout(()=>{
+    document.getElementById('mapPip').classList.add('placing');
+    document.getElementById('placeHint').style.display='block';
+    document.getElementById('mapHint').style.display='none';
+    const pin=getEvents()[evIdx]?.pin;
+    if(pin&&lMap)lMap.flyTo([pin.lat,pin.lng],13,{duration:.8});
+  },420);
+}
+function exitMapPlacingMode(){
+  mapPlacingIdx=null;
+  document.getElementById('mapPip').classList.remove('placing');
+  document.getElementById('placeHint').style.display='none';
+  document.getElementById('mapHint').style.display='block';
+}
+
+function changeMapStyle(btn){
+  document.querySelectorAll('.style-chip').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  if(lMap&&currentTile){
+    lMap.removeLayer(currentTile);
+    currentTile=L.tileLayer(MAP_TILES[btn.dataset.style],{maxZoom:19,subdomains:'abcd'}).addTo(lMap);
+  }
+}
+// グローバルに公開（onclick属性から呼ぶため）
+window.changeMapStyle=changeMapStyle;
+
+function applyMapPipState(){
+  const pip=document.getElementById('mapPip');
+  const hint=document.getElementById('mapHint');
+  const s=PIP_STATES[mapPipState];
+  pip.classList.remove('size-1','size-2');
+  if(s.cls)pip.classList.add(s.cls);
+  if(hint)hint.textContent=s.hint;
+  if(mapPipState===0){
+    mapPickerOpen=false;
+    document.getElementById('styleBar').classList.remove('show');
+  }
+  const srch=document.getElementById('mapSearch');
+  if(srch)srch.classList.toggle('show',mapPipState>0);
+  setTimeout(()=>{
+    if(lMap){
+      lMap.invalidateSize();
+    }
+  },420);
+}
+
+function initMapPip(){
+  const pip=document.getElementById('mapPip');
+  const palBtn=document.getElementById('palBtn');
+  const styleBar=document.getElementById('styleBar');
+  if(!pip||!palBtn) return;
+  let ptStart=null;
+
+  pip.addEventListener('pointerdown',e=>{
+    if(e.target===palBtn||e.target.closest('.pip-pal'))return;
+    ptStart={x:e.clientX,y:e.clientY};
+  });
+  pip.addEventListener('pointerup',e=>{
+    if(!ptStart)return;
+    const dist=Math.hypot(e.clientX-ptStart.x,e.clientY-ptStart.y);
+    if(dist<8&&mapPlacingIdx===null){
+      mapPipState=(mapPipState+1)%PIP_STATES.length;
+      applyMapPipState();
+    }
+    ptStart=null;
+  });
+  palBtn.addEventListener('click',e=>{
+    e.stopPropagation();
+    if(mapPipState===0)return;
+    mapPickerOpen=!mapPickerOpen;
+    styleBar.classList.toggle('show',mapPickerOpen);
+  });
+  document.addEventListener('click',e=>{
+    if(!pip.contains(e.target)&&!styleBar.contains(e.target)){
+      mapPickerOpen=false;styleBar.classList.remove('show');
+    }
+  });
+}
+
+function initMapSearch(){
+  const inp=document.getElementById('searchInput');
+  const btn=document.getElementById('searchBtn');
+  if(!inp||!btn)return;
+  function doSearch(){
+    const q=inp.value.trim();
+    if(!q)return;
+    btn.textContent='…';
+    fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=1`,
+      {headers:{'Accept-Language':'ja','User-Agent':'Tabi-Shiori-App'}})
+    .then(r=>r.json())
+    .then(data=>{
+      btn.textContent='🔍';
+      if(data&&data.length>0){
+        lMap.flyTo([parseFloat(data[0].lat),parseFloat(data[0].lon)],15,{duration:1.2});
+      } else {
+        showToast('場所が見つかりませんでした');
+      }
+    })
+    .catch(()=>{ btn.textContent='🔍'; });
+  }
+  btn.addEventListener('click',doSearch);
+  inp.addEventListener('keydown',e=>{if(e.key==='Enter')doSearch();});
+}
+
+// renderTimeline後にマーカーを再同期する
+function syncMapMarkers(){
+  if(!lMap)return;
+  // 既存マーカーを全削除
+  Object.values(mapMarkers).forEach(m=>lMap.removeLayer(m));
+  mapMarkers={};
+  mapActiveEvIdx=null;
+  const evs=getEvents();
+  evs.forEach((ev,i)=>{if(ev.pin)addMapMarker(i,ev.pin.lat,ev.pin.lng);});
 }
 
 function renderTimeline(){
   const tl=document.getElementById('timelineArea');
   tl.innerHTML='';
   renderTimelineInto(tl, getEvents(), curDay);
+  syncMapMarkers(); // マップピンを再同期
   // トラック位置をリセット（スライドアニメ完了後）
   setTrackX(0,false);
   // 隣接ペインをサイレント更新
@@ -1781,13 +2330,32 @@ function renderTimelineInto(tl, evs, dayIdx){
 
     const right=document.createElement('div');right.className='ev-right';
     const card=document.createElement('div');card.className='ev-card';
-    const handle=document.createElement('div');handle.className='drag-handle';handle.textContent='⠿';
+    const handle=document.createElement('div');handle.className='drag-handle';
+    handle.textContent='⠿';
+    // 6色ローテのピン色を設定
+    const pinColor=PIN_COLORS[i%PIN_COLORS.length];
+    handle.style.background=pinColor;
 
     const nameIn=document.createElement('input');nameIn.className='ev-name';nameIn.placeholder='イベント名';nameIn.value=e.name;
     nameIn.dataset.evIdx=i; nameIn.dataset.role='name'; nameIn.dataset.dayIdx=dayIdx;
     nameIn.addEventListener('input',function(){evs[i].name=this.value;saveToFirestore();});
     nameIn.addEventListener('mousedown',ev=>ev.stopPropagation());
     nameIn.addEventListener('touchstart',ev=>ev.stopPropagation(),{passive:true});
+
+    // 📍ボタン（SVGピン）
+    const pinBtn=document.createElement('button');
+    pinBtn.className='map-pin-btn';
+    pinBtn.title='ピンを設置';
+    const hasPinAlready=!!(e.pin&&e.pin.lat);
+    pinBtn.innerHTML=makePinSvg(hasPinAlready?pinColor:'#ccc',hasPinAlready?18:14);
+    if(isMainPane){
+      (function(idx,col){
+        pinBtn.addEventListener('click',ev=>{
+          ev.stopPropagation();
+          enterMapPlacingMode(idx,col);
+        });
+      })(i,pinColor);
+    }
 
     // listBtn と delBtn を状態で切り替え
     const listBtn=document.createElement('button');listBtn.id='lt-'+paneId+'-'+i;
@@ -1807,19 +2375,39 @@ function renderTimelineInto(tl, evs, dayIdx){
       renderTimeline();saveToFirestore();
     });
 
-    card.appendChild(handle);card.appendChild(nameIn);card.appendChild(listBtn);card.appendChild(delBtn);
+    card.appendChild(handle);card.appendChild(nameIn);card.appendChild(pinBtn);card.appendChild(listBtn);card.appendChild(delBtn);
     right.appendChild(card);
+
+    // カードタップ → その場所へflyTo
+    if(isMainPane){
+      (function(idx){
+        card.addEventListener('click',ev=>{
+          if(ev.target===nameIn||ev.target===pinBtn||ev.target===listBtn||ev.target===delBtn||ev.target===handle)return;
+          const pin=days[curDay]?.events[idx]?.pin;
+          if(pin&&lMap){
+            if(mapPipState===0){mapPipState=2;applyMapPipState();}
+            const delay=mapPipState>0?0:450;
+            setTimeout(()=>{
+              lMap.flyTo([pin.lat,pin.lng],14,{duration:1.2});
+              setTimeout(()=>{if(mapMarkers[idx])mapMarkers[idx].openPopup();},1300);
+            },delay);
+          }
+        });
+      })(i);
+    }
 
     // jiggle状態の切り替え関数
     wrap._enterJiggle=()=>{
       wrap.classList.add('jiggle');
       listBtn.style.display='none';
+      pinBtn.style.display='none';
       delBtn.style.display='flex';
       if(navigator.vibrate)navigator.vibrate([30,20,60]);
     };
     wrap._exitJiggle=()=>{
       wrap.classList.remove('jiggle');
       listBtn.style.display='flex';
+      pinBtn.style.display='flex';
       delBtn.style.display='none';
     };
 
