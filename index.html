@@ -199,6 +199,13 @@ body::before{
 }
 .add-day-btn:active{background:rgba(255,255,255,.1)}
 
+.del-day-btn{
+  background:transparent;
+  border:1px solid rgba(192,57,43,.45);
+  border-radius:20px;padding:4px 12px;
+  font-size:11px;color:rgba(192,57,43,.75);
+  cursor:pointer;font-family:'M PLUS Rounded 1c',sans-serif;
+  touch-action:manipulation;
   transition:opacity .25s ease;
 }
 .del-day-btn.hidden{opacity:0;pointer-events:none}
@@ -1912,7 +1919,7 @@ function renderChecklist(evs,evIdx,paneId){
       const pin=days[curDay]?.events[evIdx]?.pin;
       if(pin&&lMap){
         if(mapPipState===0){mapPipState=1;applyMapPipState();}
-        setTimeout(()=>lMap.flyTo([pin.lat,pin.lng],14,{duration:.9}),mapPipState>0?0:420);
+        setTimeout(()=>lMap.flyTo([pin.lat,pin.lng],17,{duration:.9}),mapPipState>0?0:420);
       }
     });
 
@@ -2128,7 +2135,7 @@ function initLeafletMap(){
   }catch(e){}
 
   lMap=L.map('leafletMap',{center:initC,zoom:initZ,zoomControl:false,attributionControl:true});
-  currentTile=L.tileLayer(MAP_TILES.voyager,{maxZoom:19,subdomains:'abcd'}).addTo(lMap);
+  currentTile=L.tileLayer(MAP_TILES.voyager,{maxZoom:22,subdomains:'abcd'}).addTo(lMap);
   setTimeout(()=>lMap.invalidateSize(),120);
 
   // 移動のたびにlocalStorageへ保存
@@ -2172,7 +2179,7 @@ function initLeafletMap(){
       }
     }
     _removeTempMarker();
-    exitMapPlacingMode();
+    exitMapPlacingMode(true); // ピン設置完了→地図は開いたまま
     if(navigator.vibrate) navigator.vibrate([30,20,60]);
     saveToFirestore();
   }
@@ -2276,7 +2283,7 @@ function activateMapPin(evIdx){
   if(pin&&lMap){
     if(mapPipState===0){mapPipState=2;applyMapPipState();}
     setTimeout(()=>{
-      lMap.flyTo([pin.lat,pin.lng],14,{duration:1});
+      lMap.flyTo([pin.lat,pin.lng],17,{duration:1});
       setTimeout(()=>{if(mapMarkers[evIdx])mapMarkers[evIdx].openPopup();},1100);
     },mapPipState>0?0:450);
   }
@@ -2345,11 +2352,11 @@ function enterMapPlacingMode(evIdx, color, opts){
     if(ph){ph.style.display='flex';}
     if(mh) mh.style.display='none';
     const pin=!_placingIsCheck ? getEvents()[evIdx]?.pin : _placingCheckRef?.pin;
-    if(pin&&lMap) lMap.flyTo([pin.lat,pin.lng],14,{duration:.8});
+    if(pin&&lMap) lMap.flyTo([pin.lat,pin.lng],17,{duration:.8});
   },mapPipState>0?50:430);
 }
 
-function exitMapPlacingMode(){
+function exitMapPlacingMode(keepOpen){
   mapPlacingIdx=null;
   _placingIsCheck=false;
   _placingCheckRef=null;
@@ -2363,6 +2370,8 @@ function exitMapPlacingMode(){
   if(pip) pip.classList.remove('placing');
   if(ph) ph.style.display='none';
   if(mh) mh.style.display='block';
+  // キャンセル時のみ最小化。ピン設置完了時(keepOpen=true)は地図をそのまま保つ
+  if(!keepOpen && mapPipState>0){mapPipState=0;applyMapPipState();}
 }
 
 // キャンセルボタン用グローバル関数
@@ -2382,7 +2391,7 @@ function changeMapStyle(btn){
   btn.classList.add('active');
   if(lMap&&currentTile){
     lMap.removeLayer(currentTile);
-    currentTile=L.tileLayer(MAP_TILES[btn.dataset.style],{maxZoom:19,subdomains:'abcd'}).addTo(lMap);
+    currentTile=L.tileLayer(MAP_TILES[btn.dataset.style],{maxZoom:22,subdomains:'abcd'}).addTo(lMap);
   }
 }
 // グローバルに公開（onclick属性から呼ぶため）
@@ -2692,7 +2701,7 @@ function renderTimelineInto(tl, evs, dayIdx){
             if(mapPipState===0){mapPipState=2;applyMapPipState();}
             const delay=mapPipState>0?0:450;
             setTimeout(()=>{
-              lMap.flyTo([pin.lat,pin.lng],14,{duration:1.2});
+              lMap.flyTo([pin.lat,pin.lng],17,{duration:1.2});
               setTimeout(()=>{if(mapMarkers[idx])mapMarkers[idx].openPopup();},1300);
             },delay);
           }
