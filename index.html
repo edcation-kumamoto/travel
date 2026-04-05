@@ -616,8 +616,8 @@ body::before{
 .img-modal.open{display:flex}
 .img-modal img{max-width:98%;max-height:98%;object-fit:contain;box-shadow:0 0 30px rgba(0,0,0,.5);transition:transform .1s ease-out;will-change:transform}
 
-/* ── 背景スクロール禁止 ── */
-body.modal-open{overflow:hidden;height:100vh;position:fixed;width:100%}
+/* ── 背景スクロール禁止（スクロール位置維持版） ── */
+body.modal-open{overflow:hidden;position:fixed;width:100%;left:0}
 
 .img-del-btn{
   position:absolute;top:6px;right:6px;
@@ -2148,9 +2148,14 @@ function renderChecklist(evs,evIdx,paneId){
         e.stopPropagation();
         const modal=document.getElementById('imgModal');
         const mImg=document.getElementById('modalImg');
+        const scrollY = window.scrollY; // 現在の位置をメモ
+        
         mImg.src=c.img;
         mImg.style.transform='scale(1)';// 初期化
         modal.classList.add('open');
+        
+        // スクロール位置を維持したまま固定
+        document.body.style.top = `-${scrollY}px`;
         document.body.classList.add('modal-open');
       });
 
@@ -2255,8 +2260,14 @@ function makeVIcon(isOpen){
 
   // モーダルを閉じる処理
   function closeModal(){
+    const scrollY = document.body.style.top;
     modal.classList.remove('open');
     document.body.classList.remove('modal-open');
+    document.body.style.top = '';
+    
+    // 保存しておいた位置へ瞬間移動して戻る
+    if(scrollY) window.scrollTo(0, parseInt(scrollY || '0') * -1);
+    
     mImg.style.transform = 'scale(1)';
     currentScale = 1;
   }
