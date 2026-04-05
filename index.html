@@ -580,10 +580,10 @@ body::before{
 }
 .img-v-btn.open{transform:rotate(180deg)}
 .img-toggle-label{font-size:11px;color:#3b82f6;font-weight:700;cursor:pointer}
-.img-expand{max-height:0;overflow:hidden;transition:max-height .3s cubic-bezier(.4,0,.2,1);padding:0 0 0 30px}
-.img-expand.open{max-height:400px}
-.img-expand-inner{position:relative;display:inline-block;margin:4px 0;max-width:100%}
-.img-expand-inner img{display:block;max-width:100%;max-height:260px;border-radius:10px;border:1.5px solid rgba(147,197,253,.5);object-fit:contain;cursor:zoom-in}
+.img-expand{max-height:0;overflow:hidden;transition:max-height .3s cubic-bezier(.4,0,.2,1)}
+.img-expand.open{max-height:2000px}
+.img-expand-inner{position:relative;display:inline-block;margin:4px 0;padding:0 0 0 30px;max-width:100%}
+.img-expand-inner img{display:block;max-width:100%;max-height:1000px;border-radius:10px;border:1.5px solid rgba(147,197,253,.5);object-fit:contain;cursor:zoom-in}
 
 /* ── 画像の全画面モーダル ── */
 .img-modal{
@@ -742,6 +742,7 @@ let days=[];
 let curDay=0;
 let dragSrc=null;
 let durPickerIdx=null,timePopupIdx=null,tpFixed=false,durLocked=false;
+let expandedCheckImgState = {}; // 🖼️ チェックリスト写真の開閉状態を確実に保持するためのグローバル変数
 
 // ── マップ関連 ──
 const PIN_COLORS=['#e74c3c','#3b82f6','#f59e0b','#10b981','#8b5cf6','#ec4899'];
@@ -2076,18 +2077,22 @@ function renderChecklist(evs,evIdx,paneId){
 
     // ── 画像がある場合: Vボタン行＋展開エリア ──
     if(c.img){
+      const imgKey = `${evs[evIdx].id || evIdx}-${ci}`; // イベントIDと項目のインデックスで一意に特定
+      const isImgOpen = !!expandedCheckImgState[imgKey];
+      
       const toggleRow=document.createElement('div');toggleRow.className='img-toggle-row';
 
       const vBtn=document.createElement('button');
-      vBtn.className='img-v-btn'+(c._imgOpen?' open':'');
-      vBtn.innerHTML=makeVIcon(c._imgOpen); // 自作Vアイコン関数
+      vBtn.className='img-v-btn'+(isImgOpen?' open':'');
+      vBtn.style.touchAction = 'manipulation';
+      vBtn.innerHTML=makeVIcon(isImgOpen); // 自作Vアイコン関数
 
       const lbl=document.createElement('span');
       lbl.className='img-toggle-label';
       lbl.textContent=' 写真を表示';
 
       const expand=document.createElement('div');
-      expand.className='img-expand'+(c._imgOpen?' open':'');
+      expand.className='img-expand'+(isImgOpen?' open':'');
 
       const inner=document.createElement('div');inner.className='img-expand-inner';
 
@@ -2109,16 +2114,15 @@ function renderChecklist(evs,evIdx,paneId){
       delImgBtn.className='img-del-btn';delImgBtn.textContent='✕';
       delImgBtn.addEventListener('click',e=>{
         e.stopPropagation();
-        c.img=null;c._imgOpen=false;
+        delete expandedCheckImgState[imgKey];
+        c.img=null;
         renderChecklist(evs,evIdx,pid);saveToFirestore();
       });
 
       vBtn.addEventListener('click',e=>{
         e.stopPropagation();
-        c._imgOpen=!c._imgOpen;
-        vBtn.className='img-v-btn'+(c._imgOpen?' open':'');
-        vBtn.innerHTML=makeVIcon(c._imgOpen);
-        expand.className='img-expand'+(c._imgOpen?' open':'');
+        expandedCheckImgState[imgKey] = !expandedCheckImgState[imgKey];
+        renderChecklist(evs,evIdx,pid); // 状態を反映して再描画
       });
       lbl.addEventListener('click',()=>vBtn.click());
 
