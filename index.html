@@ -584,10 +584,12 @@ body::before{
   max-height:0;
   overflow:hidden;
   transition:max-height .3s cubic-bezier(.4,0,.2,1);
-  margin-left:30px; /* 親側で余白を確保してはみ出しを防止 */
+  margin-left:30px;
   width:calc(100% - 30px);
 }
-.img-expand.open{max-height:2000px}
+.img-expand.open{
+  max-height:1000px !important; /* 十分な高さを確保 */
+}
 .img-expand-inner{
   position:relative;
   display:block;
@@ -597,11 +599,14 @@ body::before{
   box-sizing:border-box;
 }
 .img-expand-inner img{
-  display:block;
-  width:100%;
+  display:block !important;
+  width:100% !important;
+  height:auto !important;
+  min-height:150px; /* 写真が出る場所を最低限確保 */
   max-height:80vh;
   border-radius:10px;
   border:1.5px solid rgba(147,197,253,.5);
+  background:rgba(0,0,0,0.03); /* 読み込み中も枠が見えるように */
   object-fit:contain;
   cursor:zoom-in;
 }
