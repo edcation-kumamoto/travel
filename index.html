@@ -717,7 +717,6 @@ body.modal-open{overflow:hidden;height:100vh;position:fixed;width:100%}
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
-import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDMQAwcnkgQcwQl1gDiuMRqybw0zNFjVMw",
@@ -729,7 +728,6 @@ const firebaseConfig = {
 };
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
-const storage = getStorage(app);
 
 // URLのハッシュを旅程IDとして使う（なければ新規作成）
 let tripId = location.hash.slice(1);
@@ -1904,10 +1902,10 @@ function toggleList(evs,idx,paneId){
   if(btn){btn.className='list-toggle'+(evs[idx].open?' open':'');btn.textContent=evs[idx].open?'−':'≡';}
   saveToFirestore();
 }
-// ── 画像リサイズ → Firebase Storage アップロード → URL返却 ──
-async function uploadImageToStorage(file, maxPx=800){
-  // 1. Canvas でリサイズ & JPEG 変換
-  const blob = await new Promise((resolve, reject)=>{
+// ── 画像リサイズ → ImgBB アップロード → URL返却 ──
+const IMGBB_API_KEY = 'dc8bb9eeb23813d9b94bf2b8e8b1bead';
+async function readFileAsBase64(file, maxPx=800){
+  const b64 = await new Promise((resolve,reject)=>{
     const reader=new FileReader();
     reader.onload=e=>{
       const img=new Image();
@@ -1920,7 +1918,7 @@ async function uploadImageToStorage(file, maxPx=800){
         const canvas=document.createElement('canvas');
         canvas.width=w;canvas.height=h;
         canvas.getContext('2d').drawImage(img,0,0,w,h);
-        canvas.toBlob(b=>b?resolve(b):reject(new Error('toBlob失敗')),'image/jpeg',0.82);
+        resolve(canvas.toDataURL('image/jpeg',0.82).split(',')[1]);
       };
       img.onerror=reject;
       img.src=e.target.result;
@@ -1928,24 +1926,12 @@ async function uploadImageToStorage(file, maxPx=800){
     reader.onerror=reject;
     reader.readAsDataURL(file);
   });
-  // 2. Storage にアップロード（tripId ごとにフォルダ分け）
-  const imgId=Date.now()+'-'+Math.random().toString(36).slice(2,8);
-  const storageRef=ref(storage,`trips/${tripId}/images/${imgId}.jpg`);
-  await uploadBytes(storageRef, blob, {contentType:'image/jpeg'});
-  const url=await getDownloadURL(storageRef);
-  return {url, storagePath:`trips/${tripId}/images/${imgId}.jpg`};
-}
-
-// ── Storage の画像を削除 ──
-async function deleteImageFromStorage(storagePath){
-  if(!storagePath) return;
-  try{
-    const storageRef=ref(storage, storagePath);
-    await deleteObject(storageRef);
-  }catch(e){
-    // 削除失敗は静かに無視（ファイルが既にない場合など）
-    console.warn('画像削除スキップ:', e);
-  }
+  const form=new FormData();
+  form.append('image', b64);
+  const res=await fetch(`https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`,{method:'POST',body:form});
+  const json=await res.json();
+  if(!json.success) throw new Error('ImgBBアップロード失敗');
+  return json.data.url;
 }
 
 function renderChecklist(evs,evIdx,paneId){
@@ -2071,9 +2057,8 @@ function renderChecklist(evs,evIdx,paneId){
         if(!fileIn.files[0]){fileIn.remove();return;}
         camBtn.innerHTML='⏳';
         try{
-          const {url, storagePath}=await uploadImageToStorage(fileIn.files[0]);
-          c.img=url;
-          c.imgPath=storagePath;
+          const b64=await readFileAsBase64(fileIn.files[0]);
+          c.img=b64;
           fileIn.remove();
           renderChecklist(evs,evIdx,pid);
           saveToFirestore();
@@ -2124,8 +2109,7 @@ function renderChecklist(evs,evIdx,paneId){
       delImgBtn.className='img-del-btn';delImgBtn.textContent='✕';
       delImgBtn.addEventListener('click',e=>{
         e.stopPropagation();
-        deleteImageFromStorage(c.imgPath);
-        c.img=null;c.imgPath=null;c._imgOpen=false;
+        c.img=null;c._imgOpen=false;
         renderChecklist(evs,evIdx,pid);saveToFirestore();
       });
 
@@ -2154,9 +2138,9 @@ function renderChecklist(evs,evIdx,paneId){
   const ai=document.createElement('input');ai.className='add-check-input';ai.placeholder='やることを追加';
   
   // ── ＋保存 ──
-  function commitAddCheck(imgUrl, imgPath){
-    const val=ai.value.trim(); if(!val && !imgUrl) return;
-    checks.push({text:val||'写真',done:false,img:imgUrl||null,imgPath:imgPath||null});
+  function commitAddCheck(imgB64){
+    const val=ai.value.trim(); if(!val && !imgB64) return;
+    checks.push({text:val||'写真',done:false,img:imgB64||null});
     ai.value='';
     renderChecklist(evs,evIdx,pid);
     saveToFirestore();
@@ -2180,9 +2164,9 @@ function renderChecklist(evs,evIdx,paneId){
       if(!fileIn.files[0]){fileIn.remove();return;}
       aCam.innerHTML='⏳';
       try{
-        const {url, storagePath}=await uploadImageToStorage(fileIn.files[0]);
+        const b64=await readFileAsBase64(fileIn.files[0]);
         fileIn.remove();
-        commitAddCheck(url, storagePath);
+        commitAddCheck(b64);
       }catch(err){
         aCam.innerHTML=makeCamSvg('#3b82f6',14);fileIn.remove();
         showToast('画像の読み込みに失敗しました');
