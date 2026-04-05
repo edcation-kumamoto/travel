@@ -580,10 +580,31 @@ body::before{
 }
 .img-v-btn.open{transform:rotate(180deg)}
 .img-toggle-label{font-size:11px;color:#3b82f6;font-weight:700;cursor:pointer}
-.img-expand{max-height:0;overflow:hidden;transition:max-height .3s cubic-bezier(.4,0,.2,1)}
+.img-expand{
+  max-height:0;
+  overflow:hidden;
+  transition:max-height .3s cubic-bezier(.4,0,.2,1);
+  margin-left:30px; /* 親側で余白を確保してはみ出しを防止 */
+  width:calc(100% - 30px);
+}
 .img-expand.open{max-height:2000px}
-.img-expand-inner{position:relative;display:inline-block;margin:4px 0;padding:0 0 0 30px;max-width:100%}
-.img-expand-inner img{display:block;max-width:100%;max-height:1000px;border-radius:10px;border:1.5px solid rgba(147,197,253,.5);object-fit:contain;cursor:zoom-in}
+.img-expand-inner{
+  position:relative;
+  display:block;
+  margin:6px 0;
+  width:100%;
+  min-height:48px;
+  box-sizing:border-box;
+}
+.img-expand-inner img{
+  display:block;
+  width:100%;
+  max-height:80vh;
+  border-radius:10px;
+  border:1.5px solid rgba(147,197,253,.5);
+  object-fit:contain;
+  cursor:zoom-in;
+}
 
 /* ── 画像の全画面モーダル ── */
 .img-modal{
@@ -599,12 +620,12 @@ body::before{
 body.modal-open{overflow:hidden;height:100vh;position:fixed;width:100%}
 
 .img-del-btn{
-  position:absolute;top:4px;right:4px;
-  width:22px;height:22px;border-radius:50%;
-  border:2px solid #fff;background:#ff3b30;color:#fff;
-  font-size:12px;cursor:pointer;
+  position:absolute;top:6px;right:6px;
+  width:24px;height:24px;border-radius:50%;
+  border:2.5px solid #fff;background:#ff3b30;color:#fff;
+  font-size:13px;cursor:pointer;
   display:flex;align-items:center;justify-content:center;
-  box-shadow:0 1px 4px rgba(0,0,0,.3);touch-action:manipulation;
+  box-shadow:0 2px 8px rgba(0,0,0,.3);touch-action:manipulation;
   z-index: 10;
 }
 </style>
