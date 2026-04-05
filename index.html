@@ -602,13 +602,14 @@ body::before{
   display:block !important;
   width:100% !important;
   height:auto !important;
-  min-height:150px; /* 写真が出る場所を最低限確保 */
-  max-height:80vh;
+  min-height:100px;
+  background:rgba(59,130,246,0.05); /* うっすら青い背景で場所を明示 */
   border-radius:10px;
   border:1.5px solid rgba(147,197,253,.5);
-  background:rgba(0,0,0,0.03); /* 読み込み中も枠が見えるように */
   object-fit:contain;
   cursor:zoom-in;
+  /* 縦横比を事前に確保して読み込み待ちによる消失を防ぐ */
+  aspect-ratio: auto; 
 }
 
 /* ── 画像の全画面モーダル ── */
@@ -619,10 +620,18 @@ body::before{
   cursor:zoom-out;
 }
 .img-modal.open{display:flex}
-.img-modal img{max-width:98%;max-height:98%;object-fit:contain;box-shadow:0 0 30px rgba(0,0,0,.5);transition:transform .1s ease-out;will-change:transform}
+.img-modal img{
+  max-width:98%;
+  max-height:98%;
+  min-width:200px; /* 小さくなりすぎを防止 */
+  object-fit:contain;
+  box-shadow:0 0 30px rgba(0,0,0,.5);
+  transition:transform .1s ease-out;
+  will-change:transform;
+}
 
-/* ── 背景スクロール禁止（スクロール位置維持版） ── */
-body.modal-open{overflow:hidden;position:fixed;width:100%;left:0}
+/* ── 背景スクロール禁止 ── */
+body.modal-open{overflow:hidden}
 
 .img-del-btn{
   position:absolute;top:6px;right:6px;
@@ -2147,21 +2156,22 @@ function renderChecklist(evs,evIdx,paneId){
 
       const imgEl=document.createElement('img');
       imgEl.src=c.img;imgEl.alt='添付写真';
+      imgEl.loading='eager'; // 読み込みを最優先
+      imgEl.crossOrigin='anonymous';
       
       // 画像タップで全画面表示（モーダル）へ
       imgEl.addEventListener('click',e=>{
         e.stopPropagation();
         const modal=document.getElementById('imgModal');
         const mImg=document.getElementById('modalImg');
-        const scrollY = window.scrollY; // 現在の位置をメモ
         
         mImg.src=c.img;
+        mImg.loading='eager'; 
+        mImg.crossOrigin='anonymous';
         mImg.style.transform='scale(1)';// 初期化
-        modal.classList.add('open');
-        
-        // スクロール位置を維持したまま固定
-        document.body.style.top = `-${scrollY}px`;
+
         document.body.classList.add('modal-open');
+        modal.classList.add('open');
       });
 
       const delImgBtn=document.createElement('button');
@@ -2265,14 +2275,8 @@ function makeVIcon(isOpen){
 
   // モーダルを閉じる処理
   function closeModal(){
-    const scrollY = document.body.style.top;
     modal.classList.remove('open');
     document.body.classList.remove('modal-open');
-    document.body.style.top = '';
-    
-    // 保存しておいた位置へ瞬間移動して戻る
-    if(scrollY) window.scrollTo(0, parseInt(scrollY || '0') * -1);
-    
     mImg.style.transform = 'scale(1)';
     currentScale = 1;
   }
