@@ -780,6 +780,16 @@ let saveTimer = null;
 let localChangePending = false;
 let queuedSnap = null;
 
+// 描画中のスクロール飛びを防ぐ防水関数
+function withScrollGuard(fn){
+  const y = window.scrollY;
+  fn();
+  // 描画直後のガクつきを防ぐため、元の位置へ強制的に戻す
+  requestAnimationFrame(() => {
+    if(Math.abs(window.scrollY - y) > 1) window.scrollTo(0, y);
+  });
+}
+
 function saveToFirestore(){
   localChangePending = true;
   clearTimeout(saveTimer);
@@ -837,21 +847,30 @@ function applyRemoteSnap(snap){
   const activeRole= activeEl?.dataset?.role;
   const activeEvIdx= activeEl?.dataset?.evIdx;
   const activeDayIdx= activeEl?.dataset?.dayIdx;
+  const activeCheckIdx = activeEl?.dataset?.checkIdx;
 
-  days = remoteDays;
-  if(data.tripName) document.getElementById('tripName').value = data.tripName;
-  days.forEach(d=>d.events.forEach(e=>{if(e.id>=nextId)nextId=e.id+1;}));
-  curDay = Math.min(curDay, Math.max(0, days.length-1));
+  withScrollGuard(() => {
+    days = remoteDays;
+    if(data.tripName) document.getElementById('tripName').value = data.tripName;
+    days.forEach(d=>d.events.forEach(e=>{if(e.id>=nextId)nextId=e.id+1;}));
+    curDay = Math.min(curDay, Math.max(0, days.length-1));
 
-  renderHeader();renderTimeline();
+    renderHeader();renderTimeline();
 
-  // フォーカスと入力値を復元
-  if(activeEl && activeVal != null && activeRole){
-    const restored = document.querySelector(
-      `[data-role="${activeRole}"][data-ev-idx="${activeEvIdx}"][data-day-idx="${activeDayIdx}"]`
-    );
-    if(restored){ restored.value=activeVal; restored.focus(); }
-  }
+    // フォーカスと入力値を復元（より確実な方法へ）
+    if(activeEl && activeVal != null && activeRole){
+      const selStart = activeEl.selectionStart;
+      const selEnd = activeEl.selectionEnd;
+      const restored = document.querySelector(
+        `[data-role="${activeRole}"][data-ev-idx="${activeEvIdx}"][data-day-idx="${activeDayIdx}"][data-check-idx="${activeCheckIdx||''}"]`
+      );
+      if(restored){
+        restored.value = activeVal;
+        restored.focus();
+        try{ restored.setSelectionRange(selStart, selEnd); } catch(e){}
+      }
+    }
+  });
 }
 
 // Firestoreからリアルタイム受信
@@ -1967,6 +1986,10 @@ function renderChecklist(evs,evIdx,paneId){
     const inp=document.createElement('input');
     inp.className='check-text'+(c.done?' done':'');
     inp.value=c.text;
+    inp.dataset.role='check-text';
+    inp.dataset.evIdx=evIdx;
+    inp.dataset.dayIdx=curDay;
+    inp.dataset.checkIdx=ci;
     inp.addEventListener('input',function(){c.text=this.value;saveToFirestore();});
     inp.addEventListener('keydown',function(ev){
       if(ev.key==='Enter'){ev.preventDefault();if(this.value.trim()===''){checks.splice(ci,1);renderChecklist(evs,evIdx,pid);saveToFirestore();return;}const ai=cl.querySelector('.add-check-input');if(ai)ai.focus();}
@@ -2140,6 +2163,9 @@ function renderChecklist(evs,evIdx,paneId){
   plus.textContent='＋';
   plus.style.cssText='font-size:14px;color:#3b82f6;flex-shrink:0;font-family:"M PLUS Rounded 1c",sans-serif';
   const ai=document.createElement('input');ai.className='add-check-input';ai.placeholder='やることを追加';
+  ai.dataset.role='add-check';
+  ai.dataset.evIdx=evIdx;
+  ai.dataset.dayIdx=curDay;
   
   // ── ＋保存 ──
   function commitAddCheck(imgB64){
