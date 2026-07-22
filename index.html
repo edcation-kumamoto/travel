@@ -803,7 +803,7 @@ window.addEventListener('unhandledrejection', function(event) {
 });
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getFirestore, doc, setDoc, onSnapshot, deleteDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getFirestore, doc, setDoc, onSnapshot, deleteDoc, collection } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDMQAwcnkgQcwQl1gDiuMRqybw0zNFjVMw",
@@ -817,12 +817,7 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
 
-let savedTrips = JSON.parse(localStorage.getItem('my_trips') || '[]');
-const SAFE_TRIP_ID = '7dfaed27-21c9-447b-9f8d-0c4bc6711534';
-if (!savedTrips.find(t => t.id === SAFE_TRIP_ID)) {
-  savedTrips.push({id: SAFE_TRIP_ID, name: '横浜・鎌倉旅行', ts: Date.now()});
-  localStorage.setItem('my_trips', JSON.stringify(savedTrips));
-}
+// localStorageの利用を廃止（Firestore完全同期へ移行）
 
 
 // 地図削除に伴うダミー変数（ReferenceError防止用）
@@ -853,8 +848,24 @@ function applyMapPipState(){}
 let tripId = location.hash.slice(1);
 const isHome = !tripId || tripId === 'home';
 
-window.createNewTrip = () => {
-  location.hash = crypto.randomUUID();
+window.createNewTrip = async () => {
+  const newId = crypto.randomUUID();
+  try {
+    const { doc, setDoc } = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js");
+    const { getFirestore } = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js");
+    const db = getFirestore();
+    await setDoc(doc(db, 'trips', newId), {
+      tripName: '新しい旅行',
+      ts: Date.now(),
+      days: [{
+        date: (new Date().getMonth()+1) + '/' + new Date().getDate(),
+        events:[ { id:0, type:'event', name:'新しいイベント', dur:60, checks:[] } ]
+      }]
+    });
+  } catch(e) {
+    console.error('Create failed', e);
+  }
+  location.hash = newId;
   location.reload();
 };
 
@@ -869,9 +880,6 @@ window.closeTripDelete = () => {
 };
 document.getElementById('tripDeleteConfirm').addEventListener('click', async () => {
   if (!_deletingTripId) return;
-  let trips = JSON.parse(localStorage.getItem('my_trips') || '[]');
-  trips = trips.filter(t => t.id !== _deletingTripId);
-  localStorage.setItem('my_trips', JSON.stringify(trips));
   
   try {
     const { doc, deleteDoc } = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js");
@@ -900,100 +908,100 @@ if (isHome) {
   if(fabBackEl) fabBackEl.style.display = 'none';
 
   const listEl = document.getElementById('tripList');
-  savedTrips.sort((a,b) => b.ts - a.ts).forEach(t => {
-    const a = document.createElement('a');
-    a.className = 'trip-item';
-    a.href = '#' + t.id;
-    a.onclick = (e) => { 
-      // ボタン類がクリックされた場合は遷移しない
-      if (e.target.closest('button')) return;
-      setTimeout(() => location.reload(), 10); 
-    };
+  
+  onSnapshot(collection(db, 'trips'), (snapshot) => {
+    listEl.innerHTML = ''; // リストを初期化
+    const trips = [];
+    snapshot.forEach(doc => {
+      const data = doc.data();
+      trips.push({ id: doc.id, name: data.tripName || '名称未設定', ts: data.ts || 0 });
+    });
     
-    const d = new Date(t.ts);
-    const dateStr = d.getFullYear() + '/' + (d.getMonth()+1) + '/' + d.getDate() + ' ' + d.getHours() + ':' + d.getMinutes().toString().padStart(2,'0');
-    
-    // アイテムごとのロック状態（初期値はロック）
-    let isLocked = true;
-    
-    a.innerHTML = `
-      <div style="flex:1; min-width:0; padding-right:8px;">
-        <div class="trip-item-name">${t.name}</div>
-        <div class="trip-item-date">最終更新: ${dateStr}</div>
-      </div>
-    `;
-    
-    // 矢印アイコン（ロック解除時は非表示にするなどでもよいが、とりあえずそのまま表示）
-    const arrow = document.createElement('div');
-    arrow.style.cssText = 'color:#2E7D78; font-weight:bold; font-size:20px; transition:opacity .2s; margin-left:auto;';
-    arrow.textContent = '›';
-    a.appendChild(arrow);
-    
-    const btnContainer = document.createElement('div');
-    btnContainer.style.cssText = 'display:flex; align-items:center; opacity:0; pointer-events:none; width:0; overflow:hidden; transition:all .3s ease;';
-    
-    const editBtn = document.createElement('button');
-    editBtn.className = 'edit-trip-btn';
-    editBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>';
-    editBtn.onclick = (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      renameTrip(t.id, t.name);
-    };
-    btnContainer.appendChild(editBtn);
-
-    const delBtn = document.createElement('button');
-    delBtn.className = 'del-trip-btn';
-    delBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>';
-    delBtn.onclick = (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      openTripDelete(t.id, t.name);
-    };
-    btnContainer.appendChild(delBtn);
-    
-    a.appendChild(btnContainer);
-    
-    // 各アイテムの個別ロックボタン
-    const lockBtn = document.createElement('button');
-    lockBtn.style.cssText = 'background:transparent; border:none; color:#888; padding:8px; cursor:pointer; flex-shrink:0; margin-left:4px;';
-    lockBtn.innerHTML = svgLock(isLocked);
-    lockBtn.onclick = (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      isLocked = !isLocked;
-      lockBtn.innerHTML = svgLock(isLocked);
-      lockBtn.style.color = isLocked ? '#888' : '#2E7D78';
+    trips.sort((a,b) => b.ts - a.ts).forEach(t => {
+      const a = document.createElement('a');
+      a.className = 'trip-item';
+      a.href = '#' + t.id;
+      a.onclick = (e) => { 
+        if (e.target.closest('button')) return;
+        setTimeout(() => location.reload(), 10); 
+      };
       
-      if (isLocked) {
-        btnContainer.style.opacity = '0';
-        btnContainer.style.pointerEvents = 'none';
-        btnContainer.style.width = '0';
-        arrow.style.opacity = '1';
-        arrow.style.width = 'auto';
-      } else {
-        btnContainer.style.opacity = '1';
-        btnContainer.style.pointerEvents = 'auto';
-        btnContainer.style.width = '88px'; // 32px + 12px(margin) + 32px + margin
-        arrow.style.opacity = '0';
-        arrow.style.width = '0';
-      }
-    };
-    a.appendChild(lockBtn);
-    
-    listEl.appendChild(a);
+      const d = new Date(t.ts);
+      const dateStr = d.getFullYear() + '/' + (d.getMonth()+1) + '/' + d.getDate() + ' ' + d.getHours() + ':' + d.getMinutes().toString().padStart(2,'0');
+      
+      let isLocked = true;
+      
+      a.innerHTML = `
+        <div style="flex:1; min-width:0; padding-right:8px;">
+          <div class="trip-item-name">${t.name}</div>
+          <div class="trip-item-date">最終更新: ${dateStr}</div>
+        </div>
+      `;
+      
+      const arrow = document.createElement('div');
+      arrow.style.cssText = 'color:#2E7D78; font-weight:bold; font-size:20px; transition:opacity .2s; margin-left:auto;';
+      arrow.textContent = '›';
+      a.appendChild(arrow);
+      
+      const btnContainer = document.createElement('div');
+      btnContainer.style.cssText = 'display:flex; align-items:center; opacity:0; pointer-events:none; width:0; overflow:hidden; transition:all .3s ease;';
+      
+      const editBtn = document.createElement('button');
+      editBtn.className = 'edit-trip-btn';
+      editBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>';
+      editBtn.onclick = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        renameTrip(t.id, t.name);
+      };
+      btnContainer.appendChild(editBtn);
+
+      const delBtn = document.createElement('button');
+      delBtn.className = 'del-trip-btn';
+      delBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>';
+      delBtn.onclick = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        openTripDelete(t.id, t.name);
+      };
+      btnContainer.appendChild(delBtn);
+      
+      a.appendChild(btnContainer);
+      
+      const lockBtn = document.createElement('button');
+      lockBtn.style.cssText = 'background:transparent; border:none; color:#888; padding:8px; cursor:pointer; flex-shrink:0; margin-left:4px;';
+      lockBtn.innerHTML = svgLock(isLocked);
+      lockBtn.onclick = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        isLocked = !isLocked;
+        lockBtn.innerHTML = svgLock(isLocked);
+        lockBtn.style.color = isLocked ? '#888' : '#2E7D78';
+        
+        if (isLocked) {
+          btnContainer.style.opacity = '0';
+          btnContainer.style.pointerEvents = 'none';
+          btnContainer.style.width = '0';
+          arrow.style.opacity = '1';
+          arrow.style.width = 'auto';
+        } else {
+          btnContainer.style.opacity = '1';
+          btnContainer.style.pointerEvents = 'auto';
+          btnContainer.style.width = '88px';
+          arrow.style.opacity = '0';
+          arrow.style.width = '0';
+        }
+      };
+      a.appendChild(lockBtn);
+      
+      listEl.appendChild(a);
+    });
   });
   
   // これ以降の初期化処理をスキップ（意図的なthrow）
   throw new Error('STOP_EXECUTION_FOR_HOME_VIEW');
 } else {
-  const existing = savedTrips.find(t => t.id === tripId);
-  if (!existing) {
-    savedTrips.push({id: tripId, name: '旅のしおり', ts: Date.now()});
-  } else {
-    existing.ts = Date.now();
-  }
-  localStorage.setItem('my_trips', JSON.stringify(savedTrips));
+  // ホーム以外のスケジュール画面
   // スケジュール画面では戻るFABを表示
   const fabBackEl = document.getElementById('fabBack');
   if(fabBackEl) fabBackEl.classList.add('visible');
@@ -1067,14 +1075,6 @@ function saveToFirestore(immediate = false){
       ts: Date.now(),
       _savedBy: clientId
     };
-    // localStorage の名前も更新
-    let trips = JSON.parse(localStorage.getItem('my_trips') || '[]');
-    const t = trips.find(x => x.id === tripId);
-    if (t) {
-      t.name = snapshot.tripName;
-      t.ts = Date.now();
-      localStorage.setItem('my_trips', JSON.stringify(trips));
-    }
     try{
       await setDoc(doc(db,'trips',tripId), snapshot);
     } catch(err){
@@ -1154,13 +1154,6 @@ function applyRemoteSnap(snap){
     
     if(data.tripName) {
       document.getElementById('tripName').value = data.tripName;
-      // 受信した名前を自分のlocalStorage（ホーム画面用）にも反映させる
-      let trips = JSON.parse(localStorage.getItem('my_trips') || '[]');
-      const t = trips.find(x => x.id === tripId);
-      if (t) {
-        t.name = data.tripName;
-        localStorage.setItem('my_trips', JSON.stringify(trips));
-      }
     }
     
     days.forEach(d=>d.events.forEach(e=>{if(e.id>=nextId)nextId=e.id+1;}));
