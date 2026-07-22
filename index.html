@@ -1092,6 +1092,14 @@ function showToast(msg){
   setTimeout(()=>t.remove(),4000);
 }
 
+function showSyncToast(msg){
+  const t=document.createElement('div');
+  t.textContent=msg;
+  t.style.cssText='position:fixed;top:60px;right:12px;background:rgba(0,0,0,0.75);color:#fff;padding:6px 12px;border-radius:10px;font-size:11px;z-index:9999;font-family:"M PLUS Rounded 1c",sans-serif;white-space:nowrap';
+  document.body.appendChild(t);
+  setTimeout(()=>t.remove(),3000);
+}
+
 // リモートスナップを適用（自分の変更がない場合のみ呼ばれる）
 function applyRemoteSnap(snap){
   if(!snap.exists()) return;
@@ -1177,9 +1185,15 @@ onSnapshot(doc(db,'trips',tripId), snap => {
       return;
     }
 
+    // デバッグ用：同期データ受信をトーストで表示
+    const ts = snap.data()?.ts;
+    const timeStr = ts ? new Date(ts).toLocaleTimeString('ja-JP') : '?';
+    showSyncToast(`🔄 同期受信 ${timeStr}`);
+
     applyRemoteSnap(snap);
   } catch(err) {
     console.error('onSnapshot error:', err);
+    showSyncToast(`❌ 同期エラー: ${err.message}`);
   }
 });
 
