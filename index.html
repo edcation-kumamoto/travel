@@ -1056,6 +1056,9 @@ function withScrollGuard(fn){
 }
 
 function saveToFirestore(immediate = false){
+  // 初期ロードが完了していない（Firestoreから最新データを取得していない）状態での保存を禁止
+  if (!initialLoadDone && !immediate) return;
+  
   clearTimeout(saveTimer);
   const doSave = async () => {
     const snapshot = {
@@ -1108,7 +1111,19 @@ function showSyncToast(msg){
 function applyRemoteSnap(snap){
   if(!snap.exists()) return;
   const data = snap.data();
-  const remoteDays = data.days || [];
+  let remoteDays = data.days || [];
+  
+  // 何らかの理由でデータが空になってしまった場合の自己修復
+  if (remoteDays.length === 0) {
+    remoteDays = [{
+      date: (new Date().getMonth()+1) + '/' + new Date().getDate(),
+      events:[ mkEvent('新しいイベント',null,60) ]
+    }];
+    if (initialLoadDone) {
+      days = remoteDays;
+      saveToFirestore(true); // 即座に修復内容を保存
+    }
+  }
 
   if(!initialLoadDone){
     initialLoadDone = true;
