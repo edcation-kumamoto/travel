@@ -1,0 +1,3176 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<!-- v20260404-1 -->
+<title>旅のしおり</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;500;700;900&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;
+  /* 入力欄以外でiOSの長押しメニュー（コピー・選択・貼り付け）を無効化 */
+  -webkit-touch-callout:none;
+  -webkit-user-select:none;
+  user-select:none;
+}
+/* テキスト入力欄は選択・コピー・貼り付けを許可 */
+input,textarea{
+  -webkit-touch-callout:default;
+  -webkit-user-select:text;
+  user-select:text;
+}
+html,body{
+  font-family:'M PLUS Rounded 1c',sans-serif;
+  background:#F5C842;
+  min-height:100vh;
+  touch-action:pan-y;
+  overscroll-behavior-y:none;
+}
+/* プルトゥリフレッシュ表示 */
+#ptr-indicator{
+  position:fixed;top:0;left:0;right:0;z-index:500;
+  display:flex;align-items:center;justify-content:center;
+  height:0;overflow:hidden;
+  background:rgba(46,125,120,.9);
+  color:#fff;font-size:13px;font-weight:700;
+  font-family:'M PLUS Rounded 1c',sans-serif;
+  transition:height .18s ease;pointer-events:none;
+}
+#ptr-indicator.pulling{height:44px;}
+#ptr-indicator.ready{height:44px;background:#2E7D78;}
+
+/* 背景ドットパターン */
+body::before{
+  content:'';
+  position:fixed;inset:0;
+  background-image:radial-gradient(circle,rgba(0,0,0,.07) 1.5px,transparent 1.5px);
+  background-size:20px 20px;
+  pointer-events:none;
+  z-index:0;
+}
+
+.app{max-width:100%;margin:0 auto;padding:0 0 120px;position:relative;z-index:1}
+
+/* ── ヘッダー ── */
+.app-head{
+  background:linear-gradient(150deg,#1d6e6a 0%,#2E7D78 55%,#1a5c58 100%);
+  padding:14px 14px 16px;
+  border-radius:0 0 26px 26px;
+  position:sticky;top:0;z-index:100;
+  box-shadow:0 4px 20px rgba(20,80,76,.35),0 1px 0 rgba(255,255,255,.08) inset;
+  overflow:hidden;
+  transition:padding .32s cubic-bezier(.4,0,.2,1), border-radius .32s cubic-bezier(.4,0,.2,1);
+}
+
+/* ── コンパクトモード（スクロール後） ── */
+.app-head.compact{padding:6px 14px 8px;border-radius:0 0 18px 18px}
+
+.collapsible{overflow:hidden;}
+
+/* max-height でなめらかに展開・折りたたみ */
+.trip-name-row.collapsible{
+  max-height:60px;opacity:1;margin-bottom:10px;
+  transition:max-height .32s cubic-bezier(.4,0,.2,1),
+             opacity .28s cubic-bezier(.4,0,.2,1),
+             margin .32s cubic-bezier(.4,0,.2,1);
+}
+.app-head.compact .trip-name-row.collapsible{max-height:0;opacity:0;margin-bottom:0;}
+
+.date-label-wrap.collapsible{
+  max-height:32px;opacity:1;
+  transition:max-height .28s cubic-bezier(.4,0,.2,1),
+             opacity .24s cubic-bezier(.4,0,.2,1);
+}
+.app-head.compact .date-label-wrap.collapsible{max-height:0;opacity:0;}
+
+.date-dots-wrap.collapsible{
+  max-height:40px;opacity:1;margin-top:8px;
+  transition:max-height .28s cubic-bezier(.4,0,.2,1),
+             opacity .24s cubic-bezier(.4,0,.2,1),
+             margin .28s cubic-bezier(.4,0,.2,1);
+}
+.app-head.compact .date-dots-wrap.collapsible{max-height:0;opacity:0;margin-top:0;}
+
+/* 旅行名 */
+.trip-name-row{display:flex;align-items:center;justify-content:center}
+.trip-name{
+  font-size:17px;font-weight:900;
+  color:#F5C842;
+  background:transparent;border:none;outline:none;
+  text-align:center;
+  font-family:'M PLUS Rounded 1c',sans-serif;
+  width:220px;
+  letter-spacing:.04em;
+  text-shadow:0 2px 6px rgba(0,0,0,.18);
+}
+.trip-name::placeholder{color:rgba(245,200,66,.4)}
+
+/* 日付ナビ行 */
+.date-nav{display:flex;align-items:center;gap:4px}
+.nav-btn{
+  width:38px;height:38px;
+  border:none;background:rgba(255,255,255,.1);
+  color:rgba(255,255,255,.88);
+  font-size:20px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  border-radius:50%;
+  transition:background .15s,transform .1s;
+  touch-action:manipulation;flex-shrink:0;
+}
+.nav-btn:active{background:rgba(255,255,255,.22);transform:scale(.9)}
+
+.date-center{flex:1;text-align:center;min-width:0}
+.date-display{font-size:17px;font-weight:700;color:#fff;line-height:1.2}
+.day-label{font-size:11px;color:rgba(255,255,255,.55);margin-top:1px;font-family:'M PLUS Rounded 1c',sans-serif}
+
+/* 削除モード */
+.ev-wrap.jiggle .ev-card{
+  background:#fff0f0;
+  outline:2px solid rgba(255,59,48,.35);
+  outline-offset:1px;
+}
+@keyframes del-pulse{0%,100%{opacity:1}50%{opacity:.7}}
+.ev-wrap.jiggle .ev-del-btn{animation:del-pulse 1.2s ease-in-out infinite}
+
+/* 削除ボタン：list-toggleと同位置、jiggle時に差し替え */
+.ev-del-btn{
+  width:26px;height:26px;border-radius:50%;border:none;
+  background:#ff3b30;color:#fff;
+  font-size:15px;font-weight:900;line-height:1;
+  cursor:pointer;display:flex;align-items:center;justify-content:center;
+  flex-shrink:0;touch-action:manipulation;
+  box-shadow:0 2px 6px rgba(255,59,48,.45);
+}
+.ev-del-btn:active{background:#c0392b;transform:scale(.92)}
+
+/* ── イベント追加ボタン（コネクター長押しで出現） ── */
+.conn-add-btn{
+  width:30px;height:30px;border-radius:50%;
+  background:#3b82f6;color:#fff;
+  border:none;font-size:18px;font-weight:900;line-height:1;
+  display:none;align-items:center;justify-content:center;
+  cursor:grab;flex-shrink:0;
+  box-shadow:0 3px 10px rgba(59,130,246,.5);
+  touch-action:none;user-select:none;
+  transition:transform .12s;
+}
+.conn-add-btn.visible{display:flex}
+.conn-add-btn:active{transform:scale(.9)}
+
+/* ドロップターゲット（イベント上下） */
+.ev-wrap.add-target-above::before,
+.ev-wrap.add-target-below::after{
+  content:'イベントを追加';
+  display:block;
+  background:#3b82f6;color:#fff;
+  font-size:11px;font-weight:700;
+  font-family:'M PLUS Rounded 1c',sans-serif;
+  text-align:center;padding:6px 0;
+  border-radius:10px;margin:2px 0;
+}
+.ev-wrap.add-target-above::before{margin-bottom:4px}
+.ev-wrap.add-target-below::after{margin-top:4px}
+
+/* ドット行 */
+.date-dots-wrap{display:flex;justify-content:center}
+.date-dots{display:flex;justify-content:center;gap:6px}
+.dot{width:7px;height:7px;border-radius:50%;background:rgba(255,255,255,.28);transition:all .2s;cursor:pointer}
+.dot.active{background:#F5C842;transform:scale(1.5);box-shadow:0 0 0 3px rgba(245,200,66,.22)}
+.dot.has-event{background:rgba(255,255,255,.6)}
+
+/* 日程追加ボタン */
+.add-day-wrap{display:flex;justify-content:center}
+.add-day-row{display:flex;align-items:center;gap:8px;width:100%;justify-content:center}
+.add-day-btn{
+  background:transparent;
+  border:1px solid rgba(255,255,255,.22);
+  border-radius:20px;padding:4px 16px;
+  font-size:11px;color:rgba(255,255,255,.62);
+  cursor:pointer;font-family:'M PLUS Rounded 1c',sans-serif;
+  touch-action:manipulation;
+}
+.add-day-btn:active{background:rgba(255,255,255,.1)}
+
+.del-day-btn{
+  background:transparent;
+  border:1px solid rgba(192,57,43,.45);
+  border-radius:20px;padding:4px 12px;
+  font-size:11px;color:rgba(192,57,43,.75);
+  cursor:pointer;font-family:'M PLUS Rounded 1c',sans-serif;
+  touch-action:manipulation;
+  transition:opacity .25s ease;
+}
+.del-day-btn.hidden{opacity:0;pointer-events:none}
+.del-day-btn:active{background:rgba(192,57,43,.28)}
+
+/* 日程削除確認ポップアップ */
+.del-day-popup{
+  position:fixed;top:0;left:0;right:0;bottom:0;
+  background:rgba(0,0,0,.5);
+  display:none;align-items:center;justify-content:center;
+  z-index:400;
+}
+.del-day-popup.show{display:flex}
+.del-day-popup-content{
+  background:#fff;border-radius:20px;
+  padding:24px;width:80%;max-width:320px;
+  box-shadow:0 10px 40px rgba(0,0,0,.3);
+}
+.del-day-popup-title{
+  font-size:16px;font-weight:700;
+  color:#333;margin-bottom:16px;
+  text-align:center;font-family:'M PLUS Rounded 1c',sans-serif;
+}
+.del-day-popup-buttons{
+  display:flex;gap:10px;
+}
+.del-day-popup-btn{
+  flex:1;padding:12px;border:none;
+  border-radius:12px;font-size:14px;
+  font-weight:700;cursor:pointer;
+  font-family:'M PLUS Rounded 1c',sans-serif;
+  touch-action:manipulation;
+}
+.del-day-popup-btn.cancel{
+  background:#e0e0e0;color:#666;
+}
+.del-day-popup-btn.delete{
+  background:#ff3b30;color:#fff;
+}
+.del-day-popup-btn:active{
+  opacity:.7;transform:scale(.96);
+}
+
+
+/* スワイプヒント */
+.swipe-create-hint{
+  position:fixed;right:0;top:50%;transform:translateY(-50%);
+  background:#2E7D78;color:#fff;
+  padding:10px 14px;border-radius:14px 0 0 14px;
+  font-size:12px;font-weight:700;font-family:'M PLUS Rounded 1c',sans-serif;
+  z-index:200;opacity:0;pointer-events:none;transition:opacity .18s;white-space:nowrap;
+}
+.swipe-create-hint.show{opacity:1}
+.swipe-prev-hint{
+  position:fixed;left:0;top:50%;transform:translateY(-50%);
+  background:#2E7D78;color:#fff;
+  padding:10px 14px;border-radius:0 14px 14px 0;
+  font-size:12px;font-weight:700;font-family:'M PLUS Rounded 1c',sans-serif;
+  z-index:200;opacity:0;pointer-events:none;transition:opacity .18s;white-space:nowrap;
+}
+.swipe-prev-hint.show{opacity:1}
+
+/* ── スライドコンテナ ── */
+.slide-viewport{width:100%;position:relative;overflow:hidden}
+.slide-track{
+  display:flex;width:300%;
+  will-change:transform;
+}
+.slide-pane{width:33.333%;flex-shrink:0;min-height:200px;overflow:hidden}
+
+/* 新日程作成オーバーレイ */
+.create-overlay{
+  position:absolute;top:0;left:0;right:0;bottom:0;
+  display:flex;align-items:center;justify-content:center;
+  flex-direction:column;gap:10px;
+  pointer-events:none;opacity:0;transition:opacity .15s;
+}
+.create-overlay .co-icon{font-size:36px;font-family:'M PLUS Rounded 1c',sans-serif;color:#2E7D78;font-weight:900}
+.create-overlay .co-label{font-size:15px;font-weight:700;color:#2E7D78;font-family:'M PLUS Rounded 1c',sans-serif;background:rgba(245,200,66,.85);padding:6px 18px;border-radius:20px}
+
+/* ── タイムライン ── */
+.timeline-area{padding:12px 12px 4px;width:100%}
+.empty-hint{text-align:center;padding:48px 20px;color:#7a6010;font-size:14px;font-family:'M PLUS Rounded 1c',sans-serif;line-height:1.8}
+.empty-hint .big{font-size:36px;margin-bottom:10px;letter-spacing:-.02em;color:#b08800;font-weight:900}
+
+/* ドロップゾーン */
+.drop-zone{height:4px;border-radius:4px;transition:all .15s;margin:0 52px}
+.drop-zone.over{height:36px;background:rgba(59,130,246,.15);margin:2px 52px;border-radius:10px;display:flex;align-items:center;justify-content:center;border:1.5px dashed rgba(59,130,246,.5)}
+.drop-zone.over::after{content:'イベントを追加';font-size:11px;color:#3b82f6;font-weight:700;font-family:'M PLUS Rounded 1c',sans-serif}
+
+/* ── イベント ── */
+.ev-wrap{position:relative}
+.ev-wrap.dragging{opacity:.3;transform:scale(.97);transition:opacity .1s,transform .1s;}
+.ev-row{display:flex;align-items:flex-start}
+.ev-left{width:68px;flex-shrink:0;display:flex;flex-direction:column;align-items:flex-end;padding-right:8px;padding-top:8px}
+.ev-time{
+  font-size:15px;font-weight:700;
+  color:#1a5c58;
+  cursor:pointer;
+  padding:3px 5px;border-radius:6px;
+  line-height:1;white-space:nowrap;
+  transition:background .15s;
+  font-family:'M PLUS Rounded 1c',sans-serif;
+  text-shadow:0 1px 0 rgba(255,255,255,.55);
+}
+.ev-time:active{background:rgba(255,255,255,.65)}
+.ev-time.fixed{color:#c0392b;background:rgba(192,57,43,.12);text-shadow:none}
+.ev-right{flex:1;min-width:0;overflow:visible}
+
+/* ── 雲形カード ── */
+.ev-card{
+  background:#fff;
+  /* Base cloud shape */
+  border-radius:26px 30px 24px 28px / 28px 26px 30px 24px;
+  padding:6px 8px 6px 6px;
+  display:flex;align-items:center;gap:6px;min-height:38px;
+  box-shadow:
+    0 3px 10px rgba(0,0,0,.09),
+    0 1px 3px rgba(0,0,0,.05),
+    inset 0 1px 2px rgba(255,255,255,.9);
+  transition:box-shadow .2s;
+  position:relative;
+}
+/* 4種のバリエーション */
+.ev-wrap:nth-child(4n+1) .ev-card{border-radius:30px 22px 32px 24px / 24px 32px 20px 30px}
+.ev-wrap:nth-child(4n+2) .ev-card{border-radius:22px 32px 26px 30px / 30px 22px 32px 24px}
+.ev-wrap:nth-child(4n+3) .ev-card{border-radius:28px 24px 30px 20px / 20px 30px 24px 28px}
+.ev-wrap:nth-child(4n+0) .ev-card{border-radius:24px 28px 22px 32px / 32px 20px 28px 22px}
+
+.drag-handle{
+  width:22px;height:22px;border-radius:50%;
+  cursor:grab;line-height:1;flex-shrink:0;
+  touch-action:none;
+  display:flex;align-items:center;justify-content:center;
+  font-size:9px;font-weight:900;color:rgba(255,255,255,.9);
+  border:2px solid rgba(255,255,255,.6);
+  box-shadow:0 1px 5px rgba(0,0,0,.25);
+  /* background は JS でイベントごとに設定 */
+}
+.drag-handle:active{cursor:grabbing}
+@keyframes handle-pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.7;transform:scale(1.18)}}
+.ev-wrap.jiggle .drag-handle{animation:handle-pulse 1s ease-in-out infinite}
+
+/* ── 📍ボタン（SVGピン） ── */
+.map-pin-btn{
+  width:26px;height:26px;border-radius:50%;border:none;
+  background:transparent;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  flex-shrink:0;touch-action:manipulation;
+  transition:transform .15s;padding:0;
+}
+.map-pin-btn:active{transform:scale(.85)}
+
+/* ── マップ PiP ── */
+.map-pip{
+  position:fixed;bottom:20px;right:14px;
+  width:80px;height:80px;
+  border-radius:14px;overflow:hidden;
+  box-shadow:0 4px 24px rgba(0,0,0,.35);
+  z-index:500;background:#b8dbd9;cursor:pointer;
+  transition:width .4s cubic-bezier(.4,0,.2,1),
+             height .4s cubic-bezier(.4,0,.2,1),
+             border-radius .4s cubic-bezier(.4,0,.2,1);
+}
+.map-pip.size-1{width:calc(100vw - 28px);height:55vh;border-radius:18px}
+.map-pip.size-2{width:calc(100vw - 28px);height:95vh;border-radius:18px}
+@keyframes placingPulse{0%,100%{outline-color:#F5C842;box-shadow:0 0 0 0 rgba(245,200,66,.5)}50%{outline-color:#ff9500;box-shadow:0 0 0 8px rgba(245,200,66,.0)}}
+.map-pip.placing{outline:3px solid #F5C842;outline-offset:-3px;cursor:crosshair;animation:placingPulse 1.2s ease-in-out infinite}
+#leafletMap{width:100%;height:100%;position:absolute;top:0;left:0}
+.map-hint{position:absolute;bottom:5px;left:6px;background:rgba(0,0,0,.52);color:#fff;font-size:8px;padding:2px 7px;border-radius:8px;pointer-events:none;z-index:10;white-space:nowrap}
+.place-hint{position:absolute;top:7px;left:50%;transform:translateX(-50%);background:rgba(245,200,66,.95);color:#5a4500;font-size:10px;font-weight:700;padding:4px 10px;border-radius:10px;pointer-events:auto;z-index:11;white-space:nowrap;display:none;align-items:center;gap:4px}
+.pip-pal{position:absolute;top:5px;right:5px;background:rgba(255,255,255,.88);border:none;border-radius:8px;width:22px;height:22px;font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:11;box-shadow:0 1px 4px rgba(0,0,0,.25);touch-action:manipulation}
+
+/* ピンパルスアニメ */
+@keyframes pinPulse{0%,100%{transform:rotate(-45deg) scale(1)}50%{transform:rotate(-45deg) scale(1.5)}}
+.pin-active div{animation:pinPulse .45s ease-in-out 2}
+
+/* スタイルピッカー */
+.style-bar{position:fixed;bottom:148px;right:14px;display:flex;flex-direction:column;gap:5px;z-index:501;opacity:0;pointer-events:none;transition:opacity .2s}
+.style-bar.show{opacity:1;pointer-events:auto}
+.style-chip{padding:5px 11px;background:#fff;border:2px solid #ccc;border-radius:20px;font-size:11px;font-weight:700;cursor:pointer;color:#444;white-space:nowrap;font-family:'M PLUS Rounded 1c',sans-serif;box-shadow:0 2px 8px rgba(0,0,0,.15);touch-action:manipulation}
+.style-chip.active{border-color:#2E7D78;background:#2E7D78;color:#fff}
+
+/* 検索バー */
+.map-search{
+  position:fixed;bottom:108px;right:14px;
+  display:flex;align-items:center;flex-direction:row-reverse;
+  z-index:501;opacity:0;pointer-events:none;
+  transition:opacity .2s;
+}
+.map-search.show{opacity:1;pointer-events:auto}
+.map-search-icon-btn{
+  width:38px;height:38px;border:none;
+  background:#2E7D78;color:#fff;
+  border-radius:50%;
+  font-size:16px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  flex-shrink:0;touch-action:manipulation;
+  box-shadow:0 2px 10px rgba(0,0,0,.3);
+  transition:background .15s, border-radius .3s;
+  z-index:1;
+}
+.map-search.expanded .map-search-icon-btn{border-radius:0 50% 50% 0}
+.map-search-icon-btn:active{background:#1a5c58}
+.map-search-expand{
+  display:flex;align-items:center;
+  background:#fff;
+  border-radius:20px 0 0 20px;
+  box-shadow:0 2px 12px rgba(0,0,0,.2);
+  overflow:hidden;
+  max-width:0;
+  transition:max-width .3s cubic-bezier(.4,0,.2,1), opacity .25s;
+  opacity:0;
+  pointer-events:none;
+}
+.map-search.expanded .map-search-expand{
+  max-width:180px;
+  opacity:1;
+  pointer-events:auto;
+}
+.map-search input{
+  border:none;outline:none;padding:7px 12px;
+  font-family:'M PLUS Rounded 1c',sans-serif;
+  font-size:12px;color:#333;width:150px;background:transparent;
+  -webkit-user-select:text;user-select:text;
+}
+.map-search input::placeholder{color:#aaa}
+
+/* Leaflet上書き */
+.leaflet-control-zoom{display:none!important}
+.leaflet-control-attribution{font-size:7px!important;opacity:.7}
+.leaflet-popup-content{font-family:'M PLUS Rounded 1c',sans-serif;font-size:12px;font-weight:700;margin:8px 12px}
+.leaflet-popup-content-wrapper{border-radius:12px!important;box-shadow:0 4px 16px rgba(0,0,0,.2)!important}
+.leaflet-popup-close-button{display:none!important}
+.ev-name{font-size:14px;font-weight:500;color:#1a1a1a;background:transparent;border:none;outline:none;flex:1;font-family:'M PLUS Rounded 1c',sans-serif;min-width:0}
+.ev-name::placeholder{color:#ccc;font-weight:400}
+.list-toggle{width:26px;height:26px;border-radius:50%;border:none;background:rgba(46,125,120,.1);color:#2E7D78;font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;touch-action:manipulation;font-weight:700;transition:all .15s}
+.list-toggle.open{background:#2E7D78;color:#fff}
+
+/* チェックリスト */
+.checklist{background:rgba(255,255,255,.72);border-radius:0 0 20px 22px;margin-top:-8px;margin-left:68px;padding:6px 10px 8px;display:none}
+.checklist.open{display:block;background:linear-gradient(160deg,#dbeafe 0%,#bfdbfe 100%);border-top:1.5px solid rgba(147,197,253,.45)}
+.check-item{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:.5px solid rgba(147,197,253,.35)}
+.check-item:last-of-type{border-bottom:none}
+.check-box{width:22px;height:22px;border-radius:7px;border:1.5px solid #93c5fd;background:#fff;cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;transition:all .15s;touch-action:manipulation;font-size:13px}
+.check-box.checked{background:#3b82f6;border-color:#3b82f6;color:#fff}
+.check-text{font-size:13px;color:#1a1a1a;background:transparent;border:none;outline:none;flex:1;min-width:0;font-family:'M PLUS Rounded 1c',sans-serif}
+.check-text.done{text-decoration:line-through;color:#999}
+.check-del{width:20px;height:20px;border-radius:50%;border:none;background:transparent;color:#93c5fd;font-size:14px;cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;touch-action:manipulation}
+.add-check{display:flex;align-items:center;gap:6px;padding:6px 0;margin-top:2px}
+.add-check-input{font-size:13px;color:#666;background:transparent;border:none;outline:none;flex:1;min-width:0;font-family:'M PLUS Rounded 1c',sans-serif}
+.add-check-input::placeholder{color:#93c5fd}
+
+/* ── 線路コネクター ── */
+.connector{display:flex;align-items:stretch}
+.conn-left{width:58px;flex-shrink:0;display:flex;justify-content:flex-end;padding-right:8px}
+.conn-bar-col{
+  position:relative;
+  width:20px;height:100%;
+  display:flex;flex-direction:column;align-items:stretch;
+}
+/* 左右のレール */
+.conn-bar-col::before,.conn-bar-col::after{
+  content:'';
+  position:absolute;top:0;bottom:0;
+  width:2.5px;
+  background:linear-gradient(to bottom,rgba(46,125,120,.7) 0%,rgba(46,125,120,.18) 100%);
+  border-radius:2px;
+  z-index:1;
+}
+.conn-bar-col::before{left:2px}
+.conn-bar-col::after{right:2px}
+/* 枕木 */
+.conn-bar{
+  flex:1;
+  width:100%;
+  min-height:8px;
+  background:repeating-linear-gradient(
+    to bottom,
+    transparent 0px, transparent 7px,
+    rgba(46,125,120,.26) 7px, rgba(46,125,120,.26) 10px
+  );
+}
+.conn-right{flex:1;display:flex;align-items:center;justify-content:center}
+.dur-btn{
+  display:flex;align-items:center;gap:4px;cursor:pointer;
+  padding:6px 14px;
+  border-radius:20px;
+  background:rgba(46,125,120,.1);
+  border:1px solid rgba(46,125,120,.18);
+  font-family:'M PLUS Rounded 1c',sans-serif;font-size:12px;font-weight:500;color:#2E7D78;
+  touch-action:manipulation;
+}
+.dur-btn:active{background:rgba(46,125,120,.22)}
+.dur-btn.locked{background:rgba(180,100,0,.18);border-color:rgba(200,130,0,.6);color:#a06400;font-weight:700;border-width:1.5px}
+.dur-btn.locked:active{background:rgba(180,100,0,.2)}
+.dur-btn.warn{background:rgba(220,53,34,.1);border-color:rgba(220,53,34,.4);color:#dc3522;}
+.dur-btn.warn:active{background:rgba(220,53,34,.2)}
+
+/* ── ゴーストイベントカード（新規追加ドラッグ中） ── */
+.ghost-event{
+  position:fixed;
+  z-index:9999;
+  pointer-events:none;
+  width:160px;
+  height:36px;
+  background:rgba(255,255,255,.9);
+  border-radius:22px;
+  padding:0 14px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:6px;
+  opacity:.68;
+  box-shadow:0 6px 22px rgba(59,130,246,.45),0 2px 8px rgba(0,0,0,.14);
+  border:2px solid rgba(59,130,246,.72);
+  color:#3b82f6;
+  font-family:'M PLUS Rounded 1c',sans-serif;
+  font-size:12px;
+  font-weight:700;
+  white-space:nowrap;
+  transition:none;
+  will-change:left,top;
+}
+
+/* ── ピッカー ── */
+.dur-picker{position:fixed;z-index:900;background:#fff;border-top:.5px solid #e0e0e0;border-radius:20px 20px 0 0;box-shadow:0 -4px 24px rgba(0,0,0,.18);width:100%;left:0;right:0;bottom:0;overflow:hidden;display:none}
+.dur-inner{height:220px;overflow-y:scroll;scroll-snap-type:y mandatory;scrollbar-width:none;overscroll-behavior:contain;touch-action:pan-y}
+.dur-inner::-webkit-scrollbar{display:none}
+.dur-item{height:40px;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:500;scroll-snap-align:center;cursor:pointer;color:#1a1a1a;touch-action:manipulation;font-family:'M PLUS Rounded 1c',sans-serif}
+.dur-item.sel{color:#2E7D78}
+.dur-hl{position:absolute;left:0;right:0;top:90px;height:40px;border-top:1.5px solid #2E7D78;border-bottom:1.5px solid #2E7D78;pointer-events:none}
+
+/* ── 時刻ポップアップ ── */
+.time-popup{position:fixed;z-index:950;background:#fff;border:.5px solid #e0e0e0;border-radius:20px 20px 0 0;box-shadow:0 -4px 24px rgba(0,0,0,.18);padding:20px 20px 36px;width:100%;display:none}
+.tp-drum{overflow-y:scroll;height:160px;scroll-snap-type:y mandatory;scrollbar-width:none;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;touch-action:pan-y}
+.tp-drum::-webkit-scrollbar{display:none}
+.tp-drum-item{height:40px;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:500;scroll-snap-align:center;cursor:pointer;color:#1a1a1a;font-family:'M PLUS Rounded 1c',sans-serif;user-select:none}
+.tp-drum-item.sel{color:#2E7D78;font-weight:700}
+.tp-drum-pad{height:60px;flex-shrink:0}
+.tp-hl{position:absolute;left:0;right:0;top:60px;height:40px;border-top:1.5px solid #2E7D78;border-bottom:1.5px solid #2E7D78;pointer-events:none}
+.tp-fix{padding:8px 14px;border-radius:10px;border:.5px solid #e0e0e0;background:transparent;font-size:12px;font-family:'M PLUS Rounded 1c',sans-serif;cursor:pointer;color:#1a1a1a}
+.tp-fix.on{background:rgba(192,57,43,.1);border-color:rgba(192,57,43,.4);color:#c0392b;font-weight:700}
+.tp-ok{padding:8px 20px;border-radius:10px;border:none;background:#2E7D78;color:#fff;font-size:12px;font-family:'M PLUS Rounded 1c',sans-serif;cursor:pointer;font-weight:700}
+.dur-lock{padding:5px 12px;border-radius:10px;border:.5px solid #e0e0e0;background:transparent;font-size:12px;font-family:'M PLUS Rounded 1c',sans-serif;cursor:pointer;color:#888;touch-action:manipulation}
+.dur-lock.on{background:rgba(46,125,120,.1);border-color:rgba(46,125,120,.45);color:#2E7D78;font-weight:700}
+
+/* ── チェックリスト画像 ── */
+.check-img-btn{
+  width:26px;height:26px;border-radius:7px;border:none;
+  background:rgba(59,130,246,.12);color:#3b82f6;
+  font-size:14px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  flex-shrink:0;touch-action:manipulation;
+}
+.check-img-btn:active{background:rgba(59,130,246,.25)}
+.check-pin-btn{
+  width:20px;height:20px;border-radius:50%;border:none;
+  background:transparent;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  flex-shrink:0;touch-action:manipulation;padding:0;
+  transition:transform .15s;
+}
+.check-pin-btn:active{transform:scale(.82)}
+.img-toggle-row{display:flex;align-items:center;gap:6px;padding:4px 0 2px 30px}
+.img-v-btn{
+  width:22px;height:22px;border-radius:6px;border:none;
+  background:rgba(59,130,246,.15);color:#3b82f6;
+  font-size:11px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  transition:transform .2s;flex-shrink:0;touch-action:manipulation;
+}
+.img-v-btn.open{transform:rotate(180deg)}
+.img-toggle-label{font-size:11px;color:#3b82f6;font-weight:700;cursor:pointer}
+.img-expand{
+  max-height:0;
+  overflow:hidden;
+  transition:max-height .3s cubic-bezier(.4,0,.2,1);
+  margin-left:30px;
+  width:calc(100% - 30px);
+}
+.img-expand.open{
+  max-height:1000px !important; /* 十分な高さを確保 */
+}
+.img-expand-inner{
+  position:relative;
+  display:block;
+  margin:6px 0;
+  width:100%;
+  min-height:48px;
+  box-sizing:border-box;
+}
+.img-expand-inner img{
+  display:block !important;
+  width:100% !important;
+  height:auto !important;
+  min-height:100px;
+  background:rgba(59,130,246,0.05); /* うっすら青い背景で場所を明示 */
+  border-radius:10px;
+  border:1.5px solid rgba(147,197,253,.5);
+  object-fit:contain;
+  cursor:zoom-in;
+  /* 縦横比を事前に確保して読み込み待ちによる消失を防ぐ */
+  aspect-ratio: auto; 
+}
+
+/* ── 画像の全画面モーダル ── */
+.img-modal{
+  position:fixed;top:0;left:0;width:100vw;height:100vh;
+  background:rgba(0,0,0,.92);z-index:999999;
+  display:none;align-items:center;justify-content:center;
+  cursor:zoom-out;
+}
+.img-modal.open{display:flex}
+.img-modal img{
+  max-width:98%;
+  max-height:98%;
+  min-width:200px; /* 小さくなりすぎを防止 */
+  object-fit:contain;
+  box-shadow:0 0 30px rgba(0,0,0,.5);
+  transition:transform .1s ease-out;
+  will-change:transform;
+}
+
+/* ── 背景スクロール禁止 ── */
+body.modal-open{overflow:hidden}
+
+.img-del-btn{
+  position:absolute;top:6px;right:6px;
+  width:24px;height:24px;border-radius:50%;
+  border:2.5px solid #fff;background:#ff3b30;color:#fff;
+  font-size:13px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  box-shadow:0 2px 8px rgba(0,0,0,.3);touch-action:manipulation;
+  z-index: 10;
+}
+
+/* ── ホーム画面 ── */
+#homeView { display: none; padding: 20px; background: #F5C842; min-height: 100vh; box-sizing: border-box; }
+#homeView.active { display: block; }
+.home-header { font-size: 24px; font-weight: 900; color: #1a5c58; margin-bottom: 20px; text-align: center; text-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+.new-trip-btn { width: 100%; padding: 16px; border-radius: 16px; background: #2E7D78; color: #fff; border: none; font-size: 16px; font-weight: 700; cursor: pointer; margin-bottom: 24px; box-shadow: 0 4px 12px rgba(46,125,120,0.3); font-family: 'M PLUS Rounded 1c', sans-serif; touch-action: manipulation; }
+.new-trip-btn:active { transform: scale(0.97); }
+.trip-list { display: flex; flex-direction: column; gap: 12px; }
+.trip-item { background: #fff; border-radius: 16px; padding: 16px; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 3px 10px rgba(0,0,0,0.08); cursor: pointer; touch-action: manipulation; text-decoration: none; color: inherit; }
+.trip-item:active { background: #f9f9f9; transform: scale(0.98); }
+.trip-item-name { font-size: 16px; font-weight: 700; color: #333; }
+.trip-item-date { font-size: 12px; color: #888; margin-top: 4px; }
+.back-home-btn { background: rgba(255,255,255,0.2); border: none; color: #fff; padding: 4px 10px; border-radius: 12px; font-size: 12px; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; position: absolute; left: 14px; top: 12px; touch-action: manipulation; z-index: 10; }
+
+</style>
+</head>
+<body>
+
+<div id="homeView">
+  <div class="home-header">マイトリップ</div>
+  <button class="new-trip-btn" onclick="createNewTrip()">＋ 新しい旅行を作成</button>
+  <div class="trip-list" id="tripList"></div>
+</div>
+
+
+<div id="ptr-indicator">↻ 離してリロード</div>
+<div class="img-modal" id="imgModal">
+  <img src="" id="modalImg" style="transform:scale(1)">
+</div>
+<div class="app" id="app">
+  <div class="app-head" id="appHead">
+    <button class="back-home-btn" onclick="goHome()">戻る</button>
+    <div class="trip-name-row collapsible" style="position:relative;">
+      <input class="trip-name" id="tripName" value="旅のしおり" placeholder="旅行名">
+      <button id="copyUrlBtn" style="position:absolute; right:10px; background:rgba(255,255,255,0.2); border:none; color:#fff; padding:6px 10px; border-radius:12px; font-size:11px; cursor:pointer; font-weight:bold; touch-action:manipulation;">URLコピー</button>
+    </div>
+    <div class="date-nav">
+      <button class="nav-btn" id="prevDay">‹</button>
+      <div class="date-center">
+        <div class="date-display" id="dateDisplay">—</div>
+      </div>
+      <button class="nav-btn" id="nextDay">›</button>
+    </div>
+    <div class="date-dots-wrap collapsible">
+      <div class="date-dots" id="dateDots"></div>
+    </div>
+  </div>
+
+  <div class="slide-viewport" id="slideViewport">
+    <div class="slide-track" id="slideTrack">
+      <div class="slide-pane" id="panePrev"></div>
+      <div class="slide-pane" id="paneCur">
+        <div class="timeline-area" id="timelineArea"></div>
+      </div>
+      <div class="slide-pane" id="paneNext" style="position:relative">
+        <div class="create-overlay" id="createOverlay">
+          <div class="co-icon">＋</div>
+          <div class="co-label" id="createLabel">日程を作成</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 日程削除確認ポップアップ -->
+<div class="del-day-popup" id="delDayPopup">
+  <div class="del-day-popup-content">
+    <div class="del-day-popup-title">この日程を削除しますか？</div>
+    <div class="del-day-popup-buttons">
+      <button class="del-day-popup-btn cancel" id="delDayCancel">いいえ</button>
+      <button class="del-day-popup-btn delete" id="delDayConfirm">削除</button>
+    </div>
+  </div>
+</div>
+
+<!-- 検索バー -->
+<div class="map-search" id="mapSearch">
+  <button class="map-search-icon-btn" id="searchIconBtn" style="font-size:12px;font-weight:bold;">検索</button>
+  <div class="map-search-expand" id="searchExpand">
+    <input type="text" id="searchInput" placeholder="場所を検索…"/>
+  </div>
+</div>
+
+<!-- スタイルピッカー -->
+<div class="style-bar" id="styleBar">
+  <button class="style-chip active" data-style="voyager" onclick="changeMapStyle(this)">Voyager</button>
+  <button class="style-chip" data-style="positron" onclick="changeMapStyle(this)">Positron</button>
+  <button class="style-chip" data-style="dark" onclick="changeMapStyle(this)">Dark</button>
+  <button class="style-chip" data-style="osm" onclick="changeMapStyle(this)">OSM</button>
+  <button class="style-chip" data-style="topo" onclick="changeMapStyle(this)">地形図</button>
+</div>
+
+<!-- マップPiP -->
+<div class="map-pip" id="mapPip">
+  <div id="leafletMap"></div>
+  <button class="pip-pal" id="palBtn" style="font-size:10px;font-weight:bold;">色</button>
+  <div class="map-hint" id="mapHint">タップで拡大</div>
+  <div class="place-hint" id="placeHint"><span>長押しでピンを置く</span><button id="placeCancelBtn" onclick="cancelPinPlacing()" style="margin-left:8px;padding:2px 8px;border:none;background:rgba(0,0,0,.45);color:#fff;border-radius:8px;font-size:10px;font-family:'M PLUS Rounded 1c',sans-serif;cursor:pointer;touch-action:manipulation">✕ キャンセル</button></div>
+</div>
+
+<div class="dur-picker" id="durPicker">
+  <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px 8px;border-bottom:.5px solid #f0f0f0">
+    <button id="durLock" class="dur-lock">固定</button>
+    <span style="font-size:13px;font-weight:700;color:#888;font-family:'M PLUS Rounded 1c',sans-serif">所要時間</span>
+    <button id="durClose" style="border:none;background:rgba(0,0,0,.06);border-radius:50%;width:26px;height:26px;font-size:14px;cursor:pointer;color:#666">×</button>
+  </div>
+  <div style="position:relative">
+    <div class="dur-inner" id="durInner"></div>
+    <div class="dur-hl"></div>
+  </div>
+</div>
+<div class="time-popup" id="timePopup">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+    <button class="tp-fix" id="tpFix">固定</button>
+    <span style="font-size:13px;font-weight:700;color:#888;font-family:'M PLUS Rounded 1c',sans-serif">時刻を選択</span>
+    <button class="tp-ok" id="tpOk">OK</button>
+  </div>
+  <div style="display:flex;align-items:center;justify-content:center;gap:8px;position:relative">
+    <div style="position:relative;width:80px;height:160px;overflow:hidden">
+      <div class="tp-drum" id="tpHourDrum"></div>
+      <div class="tp-hl"></div>
+    </div>
+    <span style="font-size:24px;font-weight:700;color:#1a1a1a;margin-bottom:2px">:</span>
+    <div style="position:relative;width:80px;height:160px;overflow:hidden">
+      <div class="tp-drum" id="tpMinDrum"></div>
+      <div class="tp-hl"></div>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyDMQAwcnkgQcwQl1gDiuMRqybw0zNFjVMw",
+  authDomain: "travel-app-1c301.firebaseapp.com",
+  projectId: "travel-app-1c301",
+  storageBucket: "travel-app-1c301.firebasestorage.app",
+  messagingSenderId: "410781369240",
+  appId: "1:410781369240:web:279933e3693841ae40a1ed"
+};
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+
+let savedTrips = JSON.parse(localStorage.getItem('my_trips') || '[]');
+const SAFE_TRIP_ID = '7dfaed27-21c9-447b-9f8d-0c4bc6711534';
+if (!savedTrips.find(t => t.id === SAFE_TRIP_ID)) {
+  savedTrips.push({id: SAFE_TRIP_ID, name: '横浜・鎌倉旅行', ts: Date.now()});
+  localStorage.setItem('my_trips', JSON.stringify(savedTrips));
+}
+
+let tripId = location.hash.slice(1);
+const isHome = !tripId || tripId === 'home';
+
+window.createNewTrip = () => {
+  location.hash = crypto.randomUUID();
+  location.reload();
+};
+window.goHome = () => {
+  location.hash = 'home';
+  location.reload();
+};
+
+if (isHome) {
+  document.getElementById('homeView').classList.add('active');
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('ptr-indicator').style.display = 'none';
+  
+  const listEl = document.getElementById('tripList');
+  savedTrips.sort((a,b) => b.ts - a.ts).forEach(t => {
+    const a = document.createElement('a');
+    a.className = 'trip-item';
+    a.href = '#' + t.id;
+    a.onclick = () => { setTimeout(() => location.reload(), 10); };
+    
+    const d = new Date(t.ts);
+    const dateStr = d.getFullYear() + '/' + (d.getMonth()+1) + '/' + d.getDate() + ' ' + d.getHours() + ':' + d.getMinutes().toString().padStart(2,'0');
+    
+    a.innerHTML = `
+      <div>
+        <div class="trip-item-name">${t.name}</div>
+        <div class="trip-item-date">最終更新: ${dateStr}</div>
+      </div>
+      <div style="color:#2E7D78; font-weight:bold; font-size:20px;">›</div>
+    `;
+    listEl.appendChild(a);
+  });
+  
+  // これ以降の初期化処理をスキップするためのハック
+  throw new Error('STOP_EXECUTION_FOR_HOME_VIEW');
+} else {
+  const existing = savedTrips.find(t => t.id === tripId);
+  if (!existing) {
+    savedTrips.push({id: tripId, name: '旅のしおり', ts: Date.now()});
+  } else {
+    existing.ts = Date.now();
+  }
+  localStorage.setItem('my_trips', JSON.stringify(savedTrips));
+}
+
+
+const STEP=5,MAX_DUR=300;
+let nextId=100;
+let days=[];
+let curDay=0;
+let dragSrc=null;
+let durPickerIdx=null,timePopupIdx=null,tpFixed=false,durLocked=false;
+let expandedCheckImgState = {}; // 🖼️ チェックリスト写真の開閉状態を確実に保持するためのグローバル変数
+
+// ── マップ関連 ──
+const PIN_COLORS=['#e74c3c','#3b82f6','#f59e0b','#10b981','#8b5cf6','#ec4899'];
+const MAP_TILES={
+  voyager: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+  positron:'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
+  dark:    'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+  osm:     'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+  topo:    'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
+};
+const MAP_DEFAULT_CENTER=[35.685,139.752];
+const PIP_STATES=[
+  {cls:'',       hint:'タップで拡大',     zoom:11},
+  {cls:'size-1', hint:'もう一度で全画面', zoom:11},
+  {cls:'size-2', hint:'タップで最小化', zoom:11},
+];
+let lMap=null, currentTile=null, mapMarkers={};
+let mapPipState=0, mapPlacingIdx=null, mapPickerOpen=false, mapActiveEvIdx=null;
+
+function mkEvent(name,fixedTime,dur){return{id:nextId++,name,fixedTime,dur,durLocked:false,checks:[],open:false};}
+
+// ══════════════════════════════════════════════════════════
+//  保存・同期ロジック（信頼性重視版）
+//
+//  設計方針：
+//  1. 自分の入力は即座にローカルのdaysに書き込む
+//  2. saveToFirestore()は常に現在のdaysを丸ごとアップロードする
+//  3. onSnapshotが届いたら「自分が今フォーカス中のフィールド」以外をマージする
+//  4. 「自分の書き込みエコー」はhasPendingWritesで弾く（clientId不要）
+// ══════════════════════════════════════════════════════════
+
+const clientId = crypto.randomUUID(); // このタブ固有ID
+
+let saveTimer = null;
+let localChangePending = false;
+let queuedSnap = null;
+
+// 描画中のスクロール飛びを防ぐ防水関数
+function withScrollGuard(fn){
+  const y = window.scrollY;
+  fn();
+  // 描画直後のガクつきを防ぐため、元の位置へ強制的に戻す
+  requestAnimationFrame(() => {
+    if(Math.abs(window.scrollY - y) > 1) window.scrollTo(0, y);
+  });
+}
+
+function saveToFirestore(){
+  localChangePending = true;
+  clearTimeout(saveTimer);
+  const currentName = document.getElementById('tripName').value;
+  const snapshot = {
+    days: JSON.parse(JSON.stringify(days)),
+    tripName: currentName,
+    ts: Date.now(),
+    _savedBy: clientId
+  };
+  
+  // localStorage の名前も更新
+  let trips = JSON.parse(localStorage.getItem('my_trips') || '[]');
+  const t = trips.find(x => x.id === tripId);
+  if (t) {
+    t.name = currentName;
+    t.ts = Date.now();
+    localStorage.setItem('my_trips', JSON.stringify(trips));
+  }
+  saveTimer = setTimeout(async () => {
+    try{
+      await setDoc(doc(db,'trips',tripId), snapshot);
+    } catch(err){
+      console.error('save failed', err);
+      showToast('⚠️ 保存失敗。ネット接続を確認してください。');
+    }
+    saveTimer = null;
+    localChangePending = false;
+    if(queuedSnap){
+      const s = queuedSnap; queuedSnap = null;
+      applyRemoteSnap(s);
+    }
+  }, 300);
+}
+
+function showToast(msg){
+  const t=document.createElement('div');
+  t.textContent=msg;
+  t.style.cssText='position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:#c0392b;color:#fff;padding:8px 16px;border-radius:12px;font-size:12px;z-index:9999;font-family:"M PLUS Rounded 1c",sans-serif;white-space:nowrap';
+  document.body.appendChild(t);
+  setTimeout(()=>t.remove(),4000);
+}
+
+// リモートスナップを適用（自分の変更がない場合のみ呼ばれる）
+function applyRemoteSnap(snap){
+  if(!snap.exists()) return;
+  const data = snap.data();
+  const remoteDays = data.days || [];
+
+  if(!initialLoadDone){
+    initialLoadDone = true;
+    isLoadingInitialData = false; // 初期ロード完了
+    days = remoteDays;
+    document.getElementById('tripName').value = data.tripName || '';
+    days.forEach(d=>d.events.forEach(e=>{if(e.id>=nextId)nextId=e.id+1;}));
+    curDay = Math.min(curDay, Math.max(0, days.length-1));
+    renderHeader();renderTimeline();
+    initMapIfNeeded(); // ← マップ初期化
+    return;
+  }
+
+  // 他ユーザーの変更をそのまま受け入れる（自分の変更は既に保存済みのはず）
+  const activeEl  = document.activeElement;
+  const activeVal = activeEl?.value;
+  const activeRole= activeEl?.dataset?.role;
+  const activeEvIdx= activeEl?.dataset?.evIdx;
+  const activeDayIdx= activeEl?.dataset?.dayIdx;
+  const activeCheckIdx = activeEl?.dataset?.checkIdx;
+
+  withScrollGuard(() => {
+    days = remoteDays;
+    if(data.tripName) document.getElementById('tripName').value = data.tripName;
+    days.forEach(d=>d.events.forEach(e=>{if(e.id>=nextId)nextId=e.id+1;}));
+    curDay = Math.min(curDay, Math.max(0, days.length-1));
+
+    renderHeader();renderTimeline();
+
+    // フォーカスと入力値を復元（より確実な方法へ）
+    if(activeEl && activeVal != null && activeRole){
+      const selStart = activeEl.selectionStart;
+      const selEnd = activeEl.selectionEnd;
+      const restored = document.querySelector(
+        `[data-role="${activeRole}"][data-ev-idx="${activeEvIdx}"][data-day-idx="${activeDayIdx}"][data-check-idx="${activeCheckIdx||''}"]`
+      );
+      if(restored){
+        restored.value = activeVal;
+        restored.focus();
+        try{ restored.setSelectionRange(selStart, selEnd); } catch(e){}
+      }
+    }
+  });
+}
+
+// Firestoreからリアルタイム受信
+let initialLoadDone = false;
+let isLoadingInitialData = true; // 初期ロード中フラグを追加
+
+onSnapshot(doc(db,'trips',tripId), snap => {
+  // hasPendingWrites=true はローカル書き込みの即時エコー → 無視
+  if(snap.metadata.hasPendingWrites) return;
+
+  if(!snap.exists()){
+    if(initialLoadDone) return;
+    initialLoadDone = true;
+    isLoadingInitialData = false; // 初期ロード完了
+    days=[{
+      date:'10/10',
+      events:[
+        mkEvent('玉名出発','07:00',70),
+        mkEvent('駐車場',null,70),
+        mkEvent('空港・ラウンジ休憩',null,35),
+        mkEvent('飛行機チェックイン',null,60),
+        mkEvent('熊本発','06:35',105),
+        mkEvent('羽田着',null,35),
+        mkEvent('電車移動',null,0),
+        mkEvent('ホテル着',null,null),
+      ]
+    }];
+    renderHeader();renderTimeline();
+    saveToFirestore();
+    initMapIfNeeded(); // ← マップ初期化
+    return;
+  }
+
+  // 自分の書き込みのサーバー確認エコー → データはメモリに既にある、再描画不要
+  if(snap.data()._savedBy === clientId) return;
+
+  // 他ユーザーの変更 → localChangePending中は保留
+  if(localChangePending){
+    queuedSnap = snap;
+    return;
+  }
+
+  applyRemoteSnap(snap);
+});
+
+function getEvents(){return days[curDay]?days[curDay].events:[];}
+function parseT(s){if(!s||!s.includes(':'))return null;const[h,m]=s.split(':').map(Number);return isNaN(h)||isNaN(m)?null:h*60+m}
+function fmtT(m){if(m==null||isNaN(m))return'--:--';const h=Math.floor(m/60)%24,mm=m%60;return`${String(h).padStart(2,'0')}:${String(mm).padStart(2,'0')}`}
+
+// computeTimes: evs を変更しない。
+// ─ 設計思想 ─────────────────────────────────────────────────────
+//   優先順位①: fixedTime（赤）= 絶対アンカー
+//   優先順位②: durLocked（🔒）= アンカーから双方向チェーン伝播で確定する時刻
+//   優先順位③: 非ロック所要時間 = 隣接アンカー間の「余白」を均等自動配分
+//   ※ ①②で矛盾が生じた場合 → warns[i]=true で警告表示
+// ─────────────────────────────────────────────────────────────────
+function computeTimes(evs){
+  const n=evs.length;
+  const times=new Array(n).fill(null);
+  // 表示用所要時間コピー（evs は変更しない）
+  const durs=evs.map(e=>(e.dur!=null&&!isNaN(e.dur))?e.dur:null);
+  const warns=new Array(Math.max(0,n-1)).fill(false);
+
+  // ── Step1: 固定時刻をアンカーとして配置 ──
+  for(let i=0;i<n;i++) if(evs[i].fixedTime) times[i]=parseT(evs[i].fixedTime);
+
+  // ── Step2: ロック所要時間を通じて双方向チェーン伝播（繰り返し収束） ──
+  // 固定時刻から連続するロック所要時間チェーンで確定できる時刻を全て求める。
+  // 矛盾（2方向から異なる値が到達）は warns に記録。
+  let changed=true;
+  while(changed){
+    changed=false;
+    for(let i=0;i<n-1;i++){
+      if(!evs[i].durLocked||durs[i]==null||times[i]==null) continue;
+      const exp=times[i]+durs[i];
+      if(times[i+1]==null&&!evs[i+1]?.fixedTime){
+        times[i+1]=exp; changed=true;
+      } else if(times[i+1]!=null&&Math.abs(times[i+1]-exp)>0){
+        warns[i]=true; // ロック所要時間と確定済み時刻が矛盾
+      }
+    }
+    for(let i=n-2;i>=0;i--){
+      if(!evs[i].durLocked||durs[i]==null||times[i+1]==null) continue;
+      const exp=times[i+1]-durs[i];
+      if(times[i]==null&&!evs[i]?.fixedTime){
+        times[i]=exp; changed=true;
+      } else if(times[i]!=null&&Math.abs(times[i]-exp)>0){
+        warns[i]=true;
+      }
+    }
+  }
+
+  // ── Step3: 隣接アンカー時刻間の所要時間を按分 ──
+  // ユーザーが設定した所要時間を優先し、未設定のスロットのみ自動配分。
+  // 合計が固定時刻間の時間を超える場合は警告を出す。
+  for(let a=0;a<n-1;a++){
+    if(times[a]==null) continue;
+    for(let b=a+1;b<n;b++){
+      if(times[b]==null) continue;
+      const span=times[b]-times[a];
+      let setSum=0;      // 設定済み所要時間の合計
+      const freeIdx=[];  // 未設定のインデックス
+      
+      for(let k=a;k<b;k++){
+        if(evs[k].durLocked && durs[k]!=null){
+          // 🔒ロックされた所要時間のみ固定（合計に加算）
+          setSum += durs[k];
+        } else {
+          // ロックされていないスロットは自動配分の対象（既存のdur値があっても上書き可）
+          freeIdx.push(k);
+        }
+      }
+      
+      const remaining = span - setSum;
+      
+      if(remaining < 0){
+        // ロック所要時間の合計が固定時刻間の時間を超過 → 警告
+        for(let k=a;k<b;k++){
+          if(evs[k].durLocked && durs[k]!=null){
+            warns[k]=true;
+          }
+        }
+        // 自動配分スロットは0にする
+        for(const k of freeIdx) durs[k]=0;
+      } else if(freeIdx.length > 0){
+        // 余白を自動配分スロットに均等配分
+        const each=Math.max(0,Math.floor(remaining/freeIdx.length/STEP)*STEP);
+        for(const k of freeIdx) durs[k]=each;
+      }
+      
+      a=b-1; break; // 次のアンカー区間へ
+    }
+  }
+
+  // ── Step4: アンカー外の null 時刻を前→後ろに伝播 ──
+  for(let i=0;i<n-1;i++){
+    if(times[i]==null||times[i+1]!=null) continue;
+    if(evs[i+1]?.fixedTime) continue;
+    const d=durs[i];
+    if(d!=null&&!isNaN(d)) times[i+1]=times[i]+d;
+  }
+
+  // ── Step5: 残りの null 時刻を後ろ→前に伝播 ──
+  for(let i=n-1;i>=1;i--){
+    if(times[i]==null) continue;
+    let base=times[i];
+    for(let j=i-1;j>=0;j--){
+      if(evs[j]?.fixedTime||times[j]!=null) break;
+      const d=durs[j];
+      if(d==null||isNaN(d)) break;
+      base-=d;
+      times[j]=base;
+    }
+  }
+
+  return {times,durs,warns};
+}
+
+function maxDurFor(idx,times,durs,evs){
+  for(let j=idx+1;j<evs.length;j++){
+    if(evs[j].fixedTime){
+      const a=parseT(evs[j].fixedTime);
+      if(a!=null&&times[idx]!=null){
+        let o=0;
+        // evs[k].durでなくcomputeTimesで解決済みのdurs[k]を使う
+        for(let k=idx+1;k<j;k++) o+=(durs[k]||0);
+        return Math.max(0,Math.floor((a-times[idx]-o)/STEP)*STEP);
+      }
+    }
+  }
+  return MAX_DUR;
+}
+
+function goDay(d){curDay=Math.max(0,Math.min(days.length-1,d));renderHeader();renderTimeline();}
+
+// ── スライド日移動 グローバル関数群 ──────────────────────
+const COMMIT_RATIO    = 0.35;
+const CREATE_RATIO    = 0.33;
+const CREATE_COMMIT_RATIO = 0.55;
+
+function getSlideW(){ return (document.getElementById('slideViewport')||{}).offsetWidth || window.innerWidth; }
+
+function setTrackX(x, animate){
+  const track    = document.getElementById('slideTrack');
+  const viewport = document.getElementById('slideViewport');
+  if(!track||!viewport) return;
+  const W   = viewport.offsetWidth;
+  const base= -100/3;
+  const pct = base + (x/W)*(100/3);
+  track.style.transition = animate ? 'transform .32s cubic-bezier(.4,0,.2,1)' : 'none';
+  track.style.transform  = `translateX(${pct}%)`;
+}
+
+function renderPaneContent(pane, dayIdx){
+  if(!pane) return;
+  pane.innerHTML='';
+  if(dayIdx < 0 || dayIdx >= days.length) return;
+  const frag=document.createElement('div');
+  frag.className='timeline-area';
+  frag.style.cssText='pointer-events:none;opacity:.52;';
+  renderTimelineInto(frag, days[dayIdx].events, dayIdx);
+  pane.appendChild(frag);
+}
+
+function prepareAdjacentPanes(){
+  const overlay  = document.getElementById('createOverlay');
+  const panePrev = document.getElementById('panePrev');
+  const paneNext = document.getElementById('paneNext');
+  renderPaneContent(panePrev, curDay-1);
+  paneNext.innerHTML='';
+  if(curDay < days.length-1){
+    const frag=document.createElement('div');
+    frag.className='timeline-area';
+    frag.style.cssText='pointer-events:none;opacity:.52;';
+    renderTimelineInto(frag, days[curDay+1].events, curDay+1);
+    paneNext.appendChild(frag);
+  } else {
+    if(overlay){ paneNext.appendChild(overlay); overlay.style.opacity='0'; overlay.style.minHeight='200px'; }
+  }
+  setTrackX(0,false);
+}
+
+function addDay(){
+  const last=days[days.length-1];
+  let newDate='';
+  if(last&&last.date&&last.date.includes('/')){
+    const parts=last.date.split('/');
+    const year=new Date().getFullYear();
+    const dt=new Date(year,parseInt(parts[0])-1,parseInt(parts[1])+1);
+    newDate=`${dt.getMonth()+1}/${dt.getDate()}`;
+  }
+  days.push({date:newDate,events:[]});
+  curDay=days.length-1;
+  renderHeader();renderTimeline();saveToFirestore();
+}
+
+// ── タッチスワイプ ──
+(function(){
+  let swX=null,swY=null,swLocked=null,swActive=false;
+
+  function getOverlay(){ return document.getElementById('createOverlay'); }
+  function getCreateLbl(){ return document.getElementById('createLabel'); }
+
+  document.addEventListener('touchstart',e=>{
+    if(document.getElementById('durPicker').style.display==='block') return;
+    if(document.getElementById('timePopup').style.display==='block') return;
+    // ドラッグ中はスワイプしない（通常ドラッグ・新規追加ドラッグ両方）
+    if(touchDragData) return;
+    // input要素上は無視
+    if(e.target.closest('input,button,.drag-handle,.dur-btn,.ev-time,.list-toggle,.check-box,.ev-del-btn')) return;
+    swX=e.touches[0].clientX;
+    swY=e.touches[0].clientY;
+    swLocked=null; swActive=false;
+    document.getElementById('slideViewport').style.touchAction='pan-y';
+  },{passive:true});
+
+  document.addEventListener('touchmove',e=>{
+    if(swX===null||touchDragData) return;
+    const dx=e.touches[0].clientX-swX;
+    const dy=e.touches[0].clientY-swY;
+    if(swLocked===null){
+      if(Math.abs(dy)>Math.abs(dx)+10){ swLocked='y'; return; }
+      if(Math.abs(dx)>8){
+        swLocked='x'; swActive=true;
+        document.getElementById('slideViewport').style.touchAction='none';
+        prepareAdjacentPanes();
+      }
+    }
+    if(swLocked!=='x') return;
+
+    const W=getSlideW();
+    let cdx=dx;
+
+    // 一番左（前日なし）：引っ張り感
+    if(dx>0 && curDay<=0) cdx=dx*0.22;
+    // 一番右（次の日なし）：日程作成ゾーン
+    if(dx<0 && curDay>=days.length-1){
+      cdx=dx*0.78;
+      const ratio=Math.abs(dx)/W;
+      const ov=getOverlay(); const lb=getCreateLbl();
+      if(ratio>CREATE_RATIO){
+        if(ov) ov.style.opacity=String(Math.min(1,(ratio-CREATE_RATIO)/0.15));
+        if(lb) lb.textContent=ratio>=CREATE_COMMIT_RATIO?'→ 離して作成！':'日程を作成';
+      } else {
+        if(ov) ov.style.opacity='0';
+      }
+    } else {
+      const ov=getOverlay(); if(ov) ov.style.opacity='0';
+    }
+    setTrackX(cdx,false);
+  },{passive:true});
+
+  document.addEventListener('touchend',e=>{
+    document.getElementById('slideViewport').style.touchAction='pan-y';
+    const ov=getOverlay(); if(ov) ov.style.opacity='0';
+    if(!swActive||swLocked!=='x'||touchDragData){ swX=null;swY=null;swLocked=null;swActive=false; return; }
+    const dx=e.changedTouches[0].clientX-swX;
+    const W=getSlideW();
+    const ratio=Math.abs(dx)/W;
+    swX=null;swY=null;swLocked=null;swActive=false;
+
+    // 入力中のblurを強制してから保存
+    if(document.activeElement&&(document.activeElement.tagName==='INPUT'||document.activeElement.tagName==='TEXTAREA')){
+      document.activeElement.blur();
+    }
+
+    if(dx < -W*COMMIT_RATIO){
+      if(curDay < days.length-1){
+        saveToFirestore();
+        setTrackX(-W,true);
+        setTimeout(()=>{ curDay++; renderHeader(); renderTimeline(); },320);
+      } else if(ratio>=CREATE_COMMIT_RATIO){
+        setTrackX(-W,true);
+        setTimeout(()=>{ addDay(); },320);
+      } else {
+        setTrackX(0,true);
+      }
+    } else if(dx > W*COMMIT_RATIO && curDay>0){
+      saveToFirestore();
+      setTrackX(W,true);
+      setTimeout(()=>{ curDay--; renderHeader(); renderTimeline(); },320);
+    } else {
+      setTrackX(0,true);
+    }
+  },{passive:true});
+
+  // ナビボタン
+  document.getElementById('prevDay').addEventListener('click',()=>{
+    if(curDay<=0) return;
+    prepareAdjacentPanes();
+    setTrackX(getSlideW(),true);
+    setTimeout(()=>{ curDay--; renderHeader(); renderTimeline(); },320);
+  });
+  document.getElementById('nextDay').addEventListener('click',()=>{
+    if(curDay>=days.length-1) return;
+    prepareAdjacentPanes();
+    setTrackX(-getSlideW(),true);
+    setTimeout(()=>{ curDay++; renderHeader(); renderTimeline(); },320);
+  });
+})();
+
+// 日程削除確認ポップアップの処理
+function showDelDayPopup() {
+  const popup = document.getElementById('delDayPopup');
+  if (popup) popup.classList.add('show');
+}
+
+function hideDelDayPopup() {
+  const popup = document.getElementById('delDayPopup');
+  if (popup) popup.classList.remove('show');
+}
+
+function deleteCurDay() {
+  if(days.length<=1){
+    // 最後の1日は削除させない
+    const hint=document.createElement('div');
+    hint.textContent='日程は最低1日必要です';
+    hint.style.cssText='position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:#666;color:#fff;padding:8px 16px;border-radius:12px;font-size:12px;z-index:9999;font-family:"M PLUS Rounded 1c",sans-serif';
+    document.body.appendChild(hint);setTimeout(()=>hint.remove(),2500);
+    return;
+  }
+  days.splice(curDay,1);
+  curDay=Math.min(curDay,days.length-1);
+  renderHeader();renderTimeline();saveToFirestore();
+}
+
+document.getElementById('delDayCancel').addEventListener('click', hideDelDayPopup);
+document.getElementById('delDayConfirm').addEventListener('click', () => {
+  hideDelDayPopup();
+  deleteCurDay();
+});
+
+
+function renderHeader(){
+  const d=days[curDay];
+  const disp=document.getElementById('dateDisplay');
+  const prev=document.getElementById('prevDay');
+  const next=document.getElementById('nextDay');
+  if(!d){disp.textContent='—';}
+  else{
+    disp.innerHTML='';
+    // カレンダー選択式inputに変更
+    const inp=document.createElement('input');
+    inp.type='date';
+    // 既存の日付文字列をdate型に変換（M/D → YYYY-MM-DD）
+    if(d.date&&d.date.includes('/')){
+      const parts=d.date.split('/');
+      const year=new Date().getFullYear();
+      inp.value=`${year}-${String(parts[0]).padStart(2,'0')}-${String(parts[1]).padStart(2,'0')}`;
+    } else if(d.date){
+      inp.value=d.date;
+    }
+    inp.style.cssText='background:transparent;border:none;outline:none;text-align:center;font-family:"M PLUS Rounded 1c",sans-serif;font-size:17px;font-weight:700;color:#fff;width:160px;color-scheme:dark;';
+    inp.addEventListener('change',function(){
+      // YYYY-MM-DD → M/D 形式で保存
+      if(this.value){
+        const [y,m,dd]=this.value.split('-');
+        days[curDay].date=`${parseInt(m)}/${parseInt(dd)}`;
+      }
+      renderDots();saveToFirestore();
+    });
+    
+    // 日付部分の長押しで削除確認ポップアップを表示
+    let longPressTimer = null;
+    const handleLongPressStart = (e) => {
+      longPressTimer = setTimeout(() => {
+        showDelDayPopup();
+        if (navigator.vibrate) navigator.vibrate(50);
+      }, 2000);
+    };
+    const handleLongPressEnd = () => {
+      if (longPressTimer) {
+        clearTimeout(longPressTimer);
+        longPressTimer = null;
+      }
+    };
+    
+    inp.addEventListener('touchstart', handleLongPressStart, {passive: true});
+    inp.addEventListener('touchend', handleLongPressEnd);
+    inp.addEventListener('touchcancel', handleLongPressEnd);
+    inp.addEventListener('mousedown', handleLongPressStart);
+    inp.addEventListener('mouseup', handleLongPressEnd);
+    inp.addEventListener('mouseleave', handleLongPressEnd);
+    
+    disp.appendChild(inp);
+  }
+  prev.style.opacity=curDay<=0?.3:1;
+  next.style.opacity=curDay>=days.length-1?.3:1;
+  renderDots();
+}
+
+function renderDots(){
+  const dots=document.getElementById('dateDots');dots.innerHTML='';
+  days.forEach((d,i)=>{
+    const dot=document.createElement('div');
+    dot.className='dot'+(i===curDay?' active':d.events.length?' has-event':'');
+    dot.addEventListener('click',()=>goDay(i));
+    dots.appendChild(dot);
+  });
+}
+
+// ヘッダーを常に折りたたまれた状態に設定
+document.addEventListener('DOMContentLoaded', () => {
+  const head = document.getElementById('appHead');
+  if (head) head.classList.add('compact');
+});
+
+
+/* ── ドラッグ&ドロップ ── */
+let touchDragData=null;
+let touchClone=null;
+// ゴーストカード（新規イベント追加ドラッグ用）
+let ghostEl=null;
+let ghostScrollTimer=null;
+const GHOST_EDGE=90; // エッジ自動スクロール発動距離(px)
+
+function exitJiggle(){
+  document.querySelectorAll('.ev-wrap.jiggle').forEach(el=>{
+    if(el._exitJiggle) el._exitJiggle();
+    else el.classList.remove('jiggle');
+  });
+}
+
+function hideAllAddBtns(){
+  document.querySelectorAll('.conn-add-btn.visible').forEach(b=>b.classList.remove('visible'));
+}
+
+function setupDragDrop(){
+  /* ── イベントカード：タップで jiggle 解除 ── */
+  document.querySelectorAll('.ev-wrap').forEach((el,i)=>{
+    el.addEventListener('click',ev=>{
+      if(el.classList.contains('jiggle')){ev.stopPropagation();return;}
+    });
+  });
+
+  // メインペインのみを対象にする（隣接ペインのハンドルを混入させない）
+  const mainTL=document.getElementById('timelineArea');
+
+  /* デスクトップ drag はdrag-handle要素のみで行う */
+  mainTL.querySelectorAll('.drag-handle').forEach((handle,i)=>{
+    const el=handle.closest('.ev-wrap');
+    if(el){
+      el.draggable=true;
+      el.addEventListener('dragstart',e=>{
+        if(e.target.closest('.ev-name,.list-toggle,.check-box,.check-text,.add-check-input,.ev-time,.dur-btn,.ev-del-btn'))return e.preventDefault();
+        if(!e.target.closest('.drag-handle'))return e.preventDefault(); // ハンドル以外はドラッグ禁止
+        exitJiggle();
+        dragSrc=i;e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('text/plain',String(i));
+        setTimeout(()=>el.classList.add('dragging'),0);
+      });
+      el.addEventListener('dragend',()=>{el.classList.remove('dragging');dragSrc=null;cleanDZ();});
+    }
+  });
+
+  /* ドラッグハンドル：タッチ並び替え（長押しで浮かせてから移動） */
+  mainTL.querySelectorAll('.drag-handle').forEach((handle,i)=>{
+    let lpTimer=null,lpTouchId=null,lpStartPos={x:0,y:0};
+
+    // 長押し開始でドラッグをアクティブにする専用touchmoveハンドラ（non-passive）
+    function onDragHandleMove(e){
+      if(!touchDragData||touchDragData.src!==i){
+        document.removeEventListener('touchmove',onDragHandleMove);
+        return;
+      }
+      e.preventDefault(); // スクロール抑制
+      const t=e.touches[0];
+      if(touchClone){
+        touchClone.style.left=(t.clientX-touchClone.offsetWidth/2)+'px';
+        touchClone.style.top =(t.clientY-24)+'px';
+      }
+      cleanDZ();
+      const dz=findNearestDropZone(t.clientX,t.clientY);
+      if(dz)dz.classList.add('over');
+    }
+
+    handle.addEventListener('touchstart',e=>{
+      e.stopPropagation();
+      if(touchDragData)return;
+      const t=e.touches[0];
+      lpTouchId=t.identifier;
+      lpStartPos={x:t.clientX,y:t.clientY};
+      lpTimer=setTimeout(()=>{
+        lpTimer=null;
+        if(navigator.vibrate)navigator.vibrate(40);
+        exitJiggle();
+        touchDragData={src:i,touchId:lpTouchId};
+        // 元カードを浮かせる視覚フィードバック
+        const evWrap=handle.closest('.ev-wrap');
+        if(evWrap)evWrap.classList.add('dragging');
+        // イベント名を含むリッチなクローンカードを作成
+        const evName=evWrap?evWrap.querySelector('.ev-name')?.value||'⠿':'⠿';
+        createTouchCloneCard(evName,lpStartPos.x,lpStartPos.y);
+        // non-passiveのtouchmoveハンドラを登録してスクロールを抑制
+        document.addEventListener('touchmove',onDragHandleMove,{passive:false});
+      },400);
+    },{passive:true});
+
+    function clearLP(){
+      if(lpTimer){clearTimeout(lpTimer);lpTimer=null;}
+    }
+    handle.addEventListener('touchend',clearLP,{passive:true});
+    handle.addEventListener('touchcancel',clearLP,{passive:true});
+    handle.addEventListener('touchmove',e=>{
+      // 少し動いたら長押しキャンセル
+      if(lpTimer&&e.touches.length){
+        const t=e.touches[0];
+        const dx=t.clientX-lpStartPos.x,dy=t.clientY-lpStartPos.y;
+        if(Math.sqrt(dx*dx+dy*dy)>8)clearLP();
+      }
+    },{passive:true});
+  });
+
+  /* ドロップゾーン（デスクトップ）*/
+  mainTL.querySelectorAll('.drop-zone').forEach(dz=>{
+    dz.addEventListener('dragover',e=>{e.preventDefault();e.dataTransfer.dropEffect='move';cleanDZ();dz.classList.add('over');});
+    dz.addEventListener('dragleave',()=>dz.classList.remove('over'));
+    dz.addEventListener('drop',e=>{e.preventDefault();handleDrop(parseInt(dz.dataset.insert));});
+  });
+
+  /* コネクター長押し → ゴーストカード出現 → ドラッグして挿入 */
+  document.querySelectorAll('.connector').forEach((conn,ci)=>{
+    let lpTimer=null,lpTouchId=null,lpTouchPos={x:0,y:0};
+    const addBtn=conn.querySelector('.conn-add-btn');
+    if(!addBtn) return;
+    const ins=parseInt(addBtn.dataset.insertIdx);
+
+    // ── 長押し（タッチ）
+    conn.addEventListener('touchstart',e=>{
+      // ゴーストが残っている場合は強制クリーンアップして継続
+      if(touchDragData?.src==='new-add'){
+        document.removeEventListener('touchmove',onGhostMove);
+        stopGhostScroll();removeGhostCard();cleanDZ();touchDragData=null;
+      }
+      if(touchDragData)return;
+      if(e.target.closest('.dur-btn,.conn-add-btn'))return;
+      const t=e.changedTouches[0]; // touches[0]ではなくchangedTouches[0]で正しい指を取得
+      lpTouchId=t.identifier;
+      lpTouchPos={x:t.clientX,y:t.clientY};
+      lpTimer=setTimeout(()=>{
+        lpTimer=null;
+        if(navigator.vibrate)navigator.vibrate(40);
+        createGhostCard(lpTouchPos.x,lpTouchPos.y);
+        touchDragData={src:'new-add',insertIdx:ins,touchId:lpTouchId};
+        document.addEventListener('touchmove',onGhostMove,{passive:false});
+      },800);
+    },{passive:true});
+
+    function clearLP(){if(lpTimer){clearTimeout(lpTimer);lpTimer=null;}}
+    conn.addEventListener('touchend',clearLP,{passive:true});
+    conn.addEventListener('touchcancel',clearLP,{passive:true});
+    conn.addEventListener('touchmove',e=>{
+      // 少し動いたらキャンセル
+      if(lpTimer&&e.touches.length){
+        const t=e.touches[0];
+        const dx=t.clientX-lpTouchPos.x,dy=t.clientY-lpTouchPos.y;
+        if(Math.sqrt(dx*dx+dy*dy)>8)clearLP();
+      }
+    },{passive:true});
+
+    // ── 長押し（デスクトップ）
+    let lpMousePos={x:0,y:0};
+    conn.addEventListener('mousedown',e=>{
+      if(touchDragData)return;
+      if(e.target.closest('.dur-btn,.conn-add-btn'))return;
+      lpMousePos={x:e.clientX,y:e.clientY};
+      lpTimer=setTimeout(()=>{
+        lpTimer=null;
+        createGhostCard(lpMousePos.x,lpMousePos.y);
+        touchDragData={src:'new-add',insertIdx:ins,touchId:-1};
+        document.addEventListener('mousemove',onGhostMouseMove);
+        document.addEventListener('mouseup',onGhostMouseUp);
+      },800);
+    });
+    conn.addEventListener('mouseup',clearLP);
+    conn.addEventListener('mouseleave',clearLP);
+  });
+
+  /* 背景（黄色エリア）長押し → ゴーストカード出現（イベントが1つ以下の時にも使える） */
+  {
+    const bg=document.getElementById('paneCur');
+    if(bg){
+      let bgLpTimer=null,bgTouchId=null,bgTouchPos={x:0,y:0};
+      const IGNORE='.ev-wrap,.connector,.drop-zone,.dur-btn,.ev-time,.ev-name,.drag-handle,.list-toggle,.ev-del-btn,.check-box,.check-text,.add-check-input,button,input';
+
+      bg.addEventListener('touchstart',e=>{
+        // ゴーストが残っている場合は強制クリーンアップして継続
+        if(touchDragData?.src==='new-add'){
+          document.removeEventListener('touchmove',onGhostMove);
+          stopGhostScroll();removeGhostCard();cleanDZ();touchDragData=null;
+        }
+        if(touchDragData)return;
+        if(e.target.closest(IGNORE))return;
+        const t=e.changedTouches[0]; // touches[0]ではなくchangedTouches[0]で正しい指を取得
+        bgTouchId=t.identifier;
+        bgTouchPos={x:t.clientX,y:t.clientY};
+        bgLpTimer=setTimeout(()=>{
+          bgLpTimer=null;
+          if(navigator.vibrate)navigator.vibrate(40);
+          const ins=getEvents().length; // デフォルトは末尾、ドラッグ後にドロップゾーンで上書き
+          createGhostCard(bgTouchPos.x,bgTouchPos.y);
+          touchDragData={src:'new-add',insertIdx:ins,touchId:bgTouchId};
+          document.addEventListener('touchmove',onGhostMove,{passive:false});
+        },800);
+      },{passive:true});
+
+      function clearBgLP(){if(bgLpTimer){clearTimeout(bgLpTimer);bgLpTimer=null;}}
+      bg.addEventListener('touchend',clearBgLP,{passive:true});
+      bg.addEventListener('touchcancel',clearBgLP,{passive:true});
+      bg.addEventListener('touchmove',e=>{
+        if(bgLpTimer&&e.touches.length){
+          const t=e.touches[0];
+          const dx=t.clientX-bgTouchPos.x,dy=t.clientY-bgTouchPos.y;
+          if(Math.sqrt(dx*dx+dy*dy)>8)clearBgLP();
+        }
+      },{passive:true});
+
+      // デスクトップ
+      bg.addEventListener('mousedown',e=>{
+        if(touchDragData)return;
+        if(e.target.closest(IGNORE))return;
+        bgTouchPos={x:e.clientX,y:e.clientY};
+        bgLpTimer=setTimeout(()=>{
+          bgLpTimer=null;
+          const ins=getEvents().length;
+          createGhostCard(bgTouchPos.x,bgTouchPos.y);
+          touchDragData={src:'new-add',insertIdx:ins,touchId:-1};
+          document.addEventListener('mousemove',onGhostMouseMove);
+          document.addEventListener('mouseup',onGhostMouseUp);
+        },800);
+      });
+      bg.addEventListener('mouseup',clearBgLP);
+      bg.addEventListener('mouseleave',clearBgLP);
+    }
+  }
+
+  /* ev-name 2秒長押し → 削除モード */
+  document.querySelectorAll('.ev-name').forEach((nameIn,i)=>{
+    let lpTimer=null;
+    function lpStart(e){
+      // 既にjiggleなら無視
+      if(nameIn.closest('.ev-wrap')?.classList.contains('jiggle')) return;
+      lpTimer=setTimeout(()=>{
+        nameIn.blur();
+        const wrap=nameIn.closest('.ev-wrap');
+        exitJiggle();
+        if(wrap?._enterJiggle) wrap._enterJiggle();
+        else wrap?.classList.add('jiggle');
+      },2000);
+    }
+    function lpEnd(){clearTimeout(lpTimer);lpTimer=null;}
+    nameIn.addEventListener('mousedown',lpStart);
+    nameIn.addEventListener('mouseup',lpEnd);
+    nameIn.addEventListener('touchstart',lpStart,{passive:true});
+    nameIn.addEventListener('touchend',lpEnd);
+    nameIn.addEventListener('touchcancel',lpEnd);
+    nameIn.addEventListener('touchmove',lpEnd,{passive:true});
+  });
+}
+
+// ── ゴーストカード（新規イベント追加） ──────────────────────
+
+function createGhostCard(x,y){
+  removeGhostCard();
+  ghostEl=document.createElement('div');
+  ghostEl.className='ghost-event';
+  ghostEl.innerHTML='<span style="font-size:14px">＋</span>新しいイベント';
+  document.body.appendChild(ghostEl);
+  _posGhost(x,y);
+}
+function _posGhost(x,y){
+  if(!ghostEl)return;
+  const W=ghostEl.offsetWidth||160,H=ghostEl.offsetHeight||36;
+  ghostEl.style.left=(x-W/2)+'px';
+  ghostEl.style.top =(y-H/2)+'px';
+}
+function removeGhostCard(){
+  if(ghostEl){ghostEl.remove();ghostEl=null;}
+  stopGhostScroll();
+}
+function startGhostScroll(speed){
+  stopGhostScroll();
+  ghostScrollTimer=setInterval(()=>window.scrollBy(0,speed),16);
+}
+function stopGhostScroll(){
+  if(ghostScrollTimer){clearInterval(ghostScrollTimer);ghostScrollTimer=null;}
+}
+
+// ── ドロップゾーン近傍検出（感度改善） ──────────────────────
+// elementFromPoint の代わりに全ドロップゾーンのY座標との距離で判定する。
+// threshold: 指がドロップゾーン中心から何px以内なら反応するか
+const DZ_THRESHOLD = 52;
+function findNearestDropZone(x, y) {
+  const mainTL=document.getElementById('timelineArea');
+  const zones = mainTL ? mainTL.querySelectorAll('.drop-zone') : document.querySelectorAll('.drop-zone');
+  let best = null, bestDist = DZ_THRESHOLD;
+  zones.forEach(dz => {
+    const r = dz.getBoundingClientRect();
+    const cy = (r.top + r.bottom) / 2;
+    // 横方向はゾーンの左右に余裕を持たせる
+    const inX = x >= r.left - 40 && x <= r.right + 40;
+    if (!inX) return;
+    const dist = Math.abs(cy - y);
+    if (dist < bestDist) { best = dz; bestDist = dist; }
+  });
+  return best;
+}
+
+// ゴースト touchmove ハンドラ（non-passive）
+function onGhostMove(e){
+  if(!touchDragData||touchDragData.src!=='new-add'){
+    document.removeEventListener('touchmove',onGhostMove);
+    return;
+  }
+  // 2本指 → スクロール許可・ghostは動かさない
+  if(e.touches.length>=2){stopGhostScroll();return;}
+  e.preventDefault();
+  const t=e.touches[0];
+  _posGhost(t.clientX,t.clientY);
+
+  // エッジ自動スクロール
+  const vh=window.innerHeight;
+  if(t.clientY<GHOST_EDGE){
+    const rate=Math.ceil(3*(1-t.clientY/GHOST_EDGE));
+    startGhostScroll(-rate);
+  }else if(t.clientY>vh-GHOST_EDGE){
+    const rate=Math.ceil(3*((t.clientY-(vh-GHOST_EDGE))/GHOST_EDGE));
+    startGhostScroll(rate);
+  }else{
+    stopGhostScroll();
+  }
+
+  // ドロップゾーンのハイライト（近傍検出で感度向上）
+  cleanDZ();
+  const dz=findNearestDropZone(t.clientX,t.clientY);
+  if(dz)dz.classList.add('over');
+}
+
+// ゴースト mouseMove/Up（デスクトップ用）
+function onGhostMouseMove(e){
+  if(!touchDragData||touchDragData.src!=='new-add')return;
+  _posGhost(e.clientX,e.clientY);
+  cleanDZ();
+  const dz=findNearestDropZone(e.clientX,e.clientY);
+  if(dz)dz.classList.add('over');
+}
+function onGhostMouseUp(e){
+  document.removeEventListener('mousemove',onGhostMouseMove);
+  document.removeEventListener('mouseup',onGhostMouseUp);
+  if(!touchDragData||touchDragData.src!=='new-add')return;
+  removeGhostCard();
+  let ins=null;
+  const dz=findNearestDropZone(e.clientX,e.clientY);
+  if(dz)ins=parseInt(dz.dataset.insert);
+  cleanDZ();
+  touchDragData=null;
+  if(ins!==null){
+    days[curDay].events.splice(ins,0,mkEvent('新しいイベント',null,60));
+    renderTimeline();saveToFirestore();
+    setTimeout(()=>{const ns=document.querySelectorAll('.ev-name');if(ns[ins]){ns[ins].focus();ns[ins].select();}},50);
+  }
+}
+
+function createTouchClone(text,x,y,color){
+  removeTouchClone();
+  const bg=color||'#2E7D78';
+  touchClone=document.createElement('div');
+  touchClone.textContent=text;
+  touchClone.style.cssText=`position:fixed;left:${x-22}px;top:${y-22}px;width:44px;height:44px;background:${bg};color:#fff;border-radius:50%;font-size:20px;font-weight:900;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:9999;opacity:.92;box-shadow:0 4px 16px rgba(0,0,0,.22);font-family:'M PLUS Rounded 1c',sans-serif;line-height:1`;
+  document.body.appendChild(touchClone);
+}
+
+// イベントカード風のリッチなドラッグクローン
+function createTouchCloneCard(name,x,y){
+  removeTouchClone();
+  touchClone=document.createElement('div');
+  touchClone.style.cssText=`position:fixed;z-index:9999;pointer-events:none;background:#fff;border-radius:22px;padding:8px 14px;display:flex;align-items:center;gap:8px;max-width:220px;opacity:.88;box-shadow:0 8px 28px rgba(0,0,0,.22),0 2px 8px rgba(0,0,0,.12);border:2px solid rgba(46,125,120,.35);font-family:'M PLUS Rounded 1c',sans-serif;transform:rotate(-2deg) scale(1.04);transition:transform .1s;`;
+  const dot=document.createElement('span');dot.textContent='⠿';dot.style.cssText='font-size:13px;color:#c8c8c8;flex-shrink:0';
+  const label=document.createElement('span');label.textContent=name||'イベント';label.style.cssText='font-size:14px;font-weight:500;color:#1a1a1a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:160px';
+  touchClone.appendChild(dot);touchClone.appendChild(label);
+  document.body.appendChild(touchClone);
+  const W=touchClone.offsetWidth||180,H=touchClone.offsetHeight||36;
+  touchClone.style.left=(x-W/2)+'px';
+  touchClone.style.top=(y-H/2-10)+'px';
+}
+function removeTouchClone(){if(touchClone){touchClone.remove();touchClone=null;}}
+
+document.addEventListener('touchmove',e=>{
+  if(!touchDragData)return;
+  if(touchDragData.src==='new-add') return; // onGhostMoveで処理済み
+  if(typeof touchDragData.src==='number') return; // onDragHandleMoveで処理済み
+  if(touchClone){touchClone.style.left=(e.touches[0].clientX-22)+'px';touchClone.style.top=(e.touches[0].clientY-22)+'px';}
+  cleanDZ();
+  const el=document.elementFromPoint(e.touches[0].clientX,e.touches[0].clientY);
+  if(el){const dz=el.closest('.drop-zone');if(dz)dz.classList.add('over');}
+},{passive:true});
+
+// タッチキャンセル時はゴースト・ドラッグを確実に片付ける
+document.addEventListener('touchcancel',e=>{
+  if(!touchDragData) return;
+  if(touchDragData.src==='new-add'){
+    document.removeEventListener('touchmove',onGhostMove);
+    stopGhostScroll();
+    removeGhostCard();
+    cleanDZ();
+    touchDragData=null;
+  } else {
+    // 通常ドラッグのキャンセルも処理
+    removeTouchClone();
+    document.querySelectorAll('.ev-wrap.dragging').forEach(w=>w.classList.remove('dragging'));
+    cleanDZ();
+    touchDragData=null;
+  }
+});
+
+document.addEventListener('touchend',e=>{
+  if(touchDragData?.src==='new-add'){
+    // ゴーストを動かしていた指が離れたか確認
+    const ghostEnded=Array.from(e.changedTouches).some(t=>t.identifier===touchDragData.touchId);
+    // 離れた指でなくても、ゴーストの指がもうアクティブな指一覧に存在しなければ終了とみなす
+    const ghostStillActive=Array.from(e.touches).some(t=>t.identifier===touchDragData.touchId);
+    if(!ghostEnded && ghostStillActive) return; // 別の指が離れただけ → 継続
+
+    document.removeEventListener('touchmove',onGhostMove);
+    stopGhostScroll();
+
+    const pt=Array.from(e.changedTouches).find(t=>t.identifier===touchDragData.touchId)||e.changedTouches[0];
+    removeGhostCard();
+
+    let ins=null;
+    const dz=findNearestDropZone(pt.clientX,pt.clientY);
+    if(dz)ins=parseInt(dz.dataset.insert);
+    cleanDZ();
+    touchDragData=null;
+
+    if(ins!==null){
+      days[curDay].events.splice(ins,0,mkEvent('新しいイベント',null,60));
+      renderTimeline();saveToFirestore();
+      setTimeout(()=>{const ns=document.querySelectorAll('.ev-name');if(ns[ins]){ns[ins].focus();ns[ins].select();}},50);
+    }
+    return;
+  }
+
+  // ── 通常ドラッグハンドル終了 ──
+  if(!touchDragData){removeTouchClone();return;}
+
+  // ドラッグを開始した指だけ処理（別の指のtouchendは無視）
+  if(touchDragData.touchId!=null){
+    const dragEnded=Array.from(e.changedTouches).some(t=>t.identifier===touchDragData.touchId);
+    if(!dragEnded)return;
+  }
+  removeTouchClone();
+  // non-passiveのtouchmoveハンドラを削除（touchDragData=nullで内部return済みだが念のため）
+  // 元カードの浮かせスタイルを解除
+  document.querySelectorAll('.ev-wrap.dragging').forEach(w=>w.classList.remove('dragging'));
+  // ドラッグ開始した指のtouchを取得
+  const t=(touchDragData.touchId!=null
+    ? Array.from(e.changedTouches).find(t=>t.identifier===touchDragData.touchId)
+    : null) || e.changedTouches[0];
+  // findNearestDropZoneで広い範囲からドロップゾーンを検出
+  const dz=findNearestDropZone(t.clientX,t.clientY);
+  if(dz){handleDrop(parseInt(dz.dataset.insert),touchDragData.src);}
+  cleanDZ();
+  touchDragData=null;
+});
+
+function handleDrop(ins,src){
+  const s=src!==undefined?src:dragSrc;
+  const evs=getEvents();
+  if(typeof s==='number'&&s>=0&&s<evs.length&&s!==ins&&s!==ins-1){
+    const moved=evs.splice(s,1)[0];
+    const ni=ins>s?ins-1:ins;
+    evs.splice(ni,0,moved);
+    dragSrc=null;renderTimeline();saveToFirestore();
+  } else{dragSrc=null;renderTimeline();}
+}
+
+function cleanDZ(){
+  document.querySelectorAll('.drop-zone').forEach(z=>z.classList.remove('over'));
+}
+
+// 画面どこかタップでjiggle解除（ev-del-btn以外）
+// ピン設置モード中に地図外タップでキャンセル
+document.addEventListener('click',e=>{
+  if(e.target.closest('.ev-del-btn')) return;
+  if(!e.target.closest('.ev-wrap.jiggle')) exitJiggle();
+  // ピン設置モード中かつ地図外のタップでキャンセル
+  if(mapPlacingIdx!==null || (_placingPinBtn!==null)){
+    const pip=document.getElementById('mapPip');
+    if(pip&&!pip.contains(e.target)&&!e.target.closest('.map-pin-btn')&&!e.target.closest('.check-pin-btn')){
+      exitMapPlacingMode();
+    }
+  }
+},{capture:true});
+
+function openDurPicker(idx,el){
+  if(durPickerIdx===idx){closeDurPicker();return;}
+  closeTimePopup();durPickerIdx=idx;
+  const evs=getEvents(),{times,durs}=computeTimes(evs);
+  const maxD=maxDurFor(idx,times,durs,evs),cur=durs[idx]??evs[idx].dur??0;
+  durLocked=!!evs[idx].durLocked;
+  document.getElementById('durLock').className='dur-lock'+(durLocked?' on':'');
+  document.getElementById('durLock').textContent=durLocked?'🔒 固定':'🔓 固定';
+  const inner=document.getElementById('durInner');inner.innerHTML='';
+  const opts=[];for(let v=0;v<=Math.min(maxD,MAX_DUR);v+=STEP)opts.push(v);
+  // 上下パッド（0分・最大分を中央に選択できるように）
+  const padT=document.createElement('div');padT.style.cssText='height:90px;flex-shrink:0';inner.appendChild(padT);
+  opts.forEach(v=>{
+    const d=document.createElement('div');d.className='dur-item'+(v===cur?' sel':'');d.textContent=v+'分';
+    d.addEventListener('click',()=>{evs[idx].dur=v;evs[idx].durLocked=durLocked;closeDurPicker();renderTimeline();saveToFirestore();});
+    inner.appendChild(d);
+  });
+  const padB=document.createElement('div');padB.style.cssText='height:90px;flex-shrink:0';inner.appendChild(padB);
+  const p=document.getElementById('durPicker');
+  p.style.cssText='display:block;position:fixed;bottom:0;left:0;right:0;width:100%;border-radius:20px 20px 0 0;box-shadow:0 -4px 24px rgba(0,0,0,.18);z-index:900;background:#fff;border-top:.5px solid #e0e0e0;overflow:hidden;';
+  document.body.style.overflow='hidden';
+  const si=opts.indexOf(cur);if(si>=0)inner.scrollTop=si*40;
+  setTimeout(()=>document.addEventListener('click',durOut),10);
+}
+function durOut(e){if(!document.getElementById('durPicker').contains(e.target))closeDurPicker();}
+function closeDurPicker(){document.getElementById('durPicker').style.display='none';durPickerIdx=null;document.removeEventListener('click',durOut);document.body.style.overflow='';}
+
+document.getElementById('durClose').addEventListener('click',closeDurPicker);
+document.getElementById('durLock').addEventListener('click',function(e){
+  e.stopPropagation();
+  durLocked=!durLocked;
+  this.className='dur-lock'+(durLocked?' on':'');
+  this.textContent=durLocked?'🔒 固定':'🔓 固定';
+  // 即座にイベントデータに反映して保存
+  if(durPickerIdx!=null){
+    const evs=getEvents();
+    if(evs[durPickerIdx]) {
+      evs[durPickerIdx].durLocked=durLocked;
+      saveToFirestore();
+    }
+  }
+});
+
+function buildDrum(drumEl, items, selectedVal) {
+  drumEl.innerHTML = '';
+  const padT = document.createElement('div'); padT.className = 'tp-drum-pad'; drumEl.appendChild(padT);
+  items.forEach(v => {
+    const d = document.createElement('div');
+    d.className = 'tp-drum-item' + (v === selectedVal ? ' sel' : '');
+    d.textContent = String(v).padStart(2, '0');
+    drumEl.appendChild(d);
+  });
+  const padB = document.createElement('div'); padB.className = 'tp-drum-pad'; drumEl.appendChild(padB);
+  const idx = items.indexOf(selectedVal);
+  if (idx >= 0) drumEl.scrollTop = idx * 40;
+}
+
+function getDrumValue(drumEl) {
+  const idx = Math.round(drumEl.scrollTop / 40);
+  const items = Array.from(drumEl.querySelectorAll('.tp-drum-item'));
+  return items[idx] ? parseInt(items[idx].textContent) : 0;
+}
+
+const HOURS = Array.from({length:24},(_,i)=>i);
+const MINS  = Array.from({length:12},(_,i)=>i*5); // 0,5,10,...,55
+
+function openTimePopup(idx,el){
+  if(timePopupIdx===idx){closeTimePopup();return;}
+  closeDurPicker();timePopupIdx=idx;
+  const evs=getEvents(),{times}=computeTimes(evs);
+  const t=times[idx]??540; // デフォルト9:00
+  tpFixed=!!evs[idx].fixedTime;
+  const h=Math.floor(t/60)%24;
+  const m=Math.round((t%60)/5)*5%60;
+  buildDrum(document.getElementById('tpHourDrum'), HOURS, h);
+  buildDrum(document.getElementById('tpMinDrum'),  MINS,  m);
+  document.getElementById('tpFix').className='tp-fix'+(tpFixed?' on':'');
+  const p=document.getElementById('timePopup');
+  p.style.cssText='display:block;position:fixed;bottom:0;left:0;right:0;top:auto;width:100%;border-radius:20px 20px 0 0;box-shadow:0 -4px 24px rgba(0,0,0,.18);padding:20px 20px 36px;z-index:950;background:#fff;border:.5px solid #e0e0e0;';
+  document.body.style.overflow='hidden';
+  setTimeout(()=>document.addEventListener('click',timeOut),10);
+}
+
+function applyTime(){
+  if(timePopupIdx==null)return;
+  const h=getDrumValue(document.getElementById('tpHourDrum'));
+  const m=getDrumValue(document.getElementById('tpMinDrum'));
+  const parsed=h*60+m;
+  const evs=getEvents();
+  if(tpFixed){
+    evs[timePopupIdx].fixedTime=fmtT(parsed);
+  } else {
+    evs[timePopupIdx].fixedTime=null;
+    const {times}=computeTimes(evs);
+    if(timePopupIdx>0&&times[timePopupIdx-1]!=null){
+      const nd=parsed-times[timePopupIdx-1];
+      if(nd>=0) evs[timePopupIdx-1].dur=nd;
+      // マイナスになる場合は何もしない（ユーザーが固定ボタンで明示的に固定すべき）
+    }
+    // 前の時刻が不明でも強制固定しない（fixedTime=nullのまま）
+  }
+  closeTimePopup();renderTimeline();saveToFirestore();
+}
+document.getElementById('tpFix').addEventListener('click',function(){tpFixed=!tpFixed;this.className='tp-fix'+(tpFixed?' on':'');});
+document.getElementById('tpOk').addEventListener('click',applyTime);
+function timeOut(e){if(!document.getElementById('timePopup').contains(e.target))closeTimePopup();}
+function closeTimePopup(){document.getElementById('timePopup').style.display='none';timePopupIdx=null;document.removeEventListener('click',timeOut);document.body.style.overflow='';}
+
+function toggleList(evs,idx,paneId){
+  evs[idx].open=!evs[idx].open;
+  const pid=paneId||'main';
+  const cl=document.getElementById('cl-'+pid+'-'+idx);
+  const btn=document.getElementById('lt-'+pid+'-'+idx);
+  if(cl)cl.className='checklist'+(evs[idx].open?' open':'');
+  if(btn){btn.className='list-toggle'+(evs[idx].open?' open':'');btn.textContent=evs[idx].open?'−':'≡';}
+  saveToFirestore();
+}
+// ── 画像リサイズ → ImgBB アップロード → URL返却 ──
+const IMGBB_API_KEY = 'dc8bb9eeb23813d9b94bf2b8e8b1bead';
+async function readFileAsBase64(file, maxPx=800){
+  const b64 = await new Promise((resolve,reject)=>{
+    const reader=new FileReader();
+    reader.onload=e=>{
+      const img=new Image();
+      img.onload=()=>{
+        let {width:w,height:h}=img;
+        if(w>maxPx||h>maxPx){
+          if(w>h){h=Math.round(h*maxPx/w);w=maxPx;}
+          else{w=Math.round(w*maxPx/h);h=maxPx;}
+        }
+        const canvas=document.createElement('canvas');
+        canvas.width=w;canvas.height=h;
+        canvas.getContext('2d').drawImage(img,0,0,w,h);
+        resolve(canvas.toDataURL('image/jpeg',0.82).split(',')[1]);
+      };
+      img.onerror=reject;
+      img.src=e.target.result;
+    };
+    reader.onerror=reject;
+    reader.readAsDataURL(file);
+  });
+  const form=new FormData();
+  form.append('image', b64);
+  const res=await fetch(`https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`,{method:'POST',body:form});
+  const json=await res.json();
+  if(!json.success) throw new Error('ImgBBアップロード失敗');
+  return json.data.url;
+}
+
+function renderChecklist(evs,evIdx,paneId){
+  const pid=paneId||'main';
+  const cl=document.getElementById('cl-'+pid+'-'+evIdx);if(!cl)return;
+  const checks=evs[evIdx].checks;cl.innerHTML='';
+
+  checks.forEach((c,ci)=>{
+    // ── チェックアイテム行 ──
+    const row=document.createElement('div');row.className='check-item';
+    // 行タップ → ピンへflyTo
+    row.addEventListener('click',ev=>{
+      if(ev.target.tagName==='BUTTON'||ev.target.tagName==='INPUT') return;
+      const pin=days[curDay]?.events[evIdx]?.pin;
+      if(pin&&lMap){
+        if(mapPipState===0){mapPipState=1;applyMapPipState();}
+        setTimeout(()=>lMap.flyTo([pin.lat,pin.lng],17,{duration:.9}),mapPipState>0?0:420);
+      }
+    });
+
+    const box=document.createElement('div');
+    box.className='check-box'+(c.done?' checked':'');
+    box.textContent=c.done?'✓':'';
+    box.addEventListener('click',()=>{
+      c.done=!c.done;
+      box.className='check-box'+(c.done?' checked':'');
+      box.textContent=c.done?'✓':'';
+      inp.className='check-text'+(c.done?' done':'');
+      saveToFirestore();
+    });
+
+    const inp=document.createElement('input');
+    inp.className='check-text'+(c.done?' done':'');
+    inp.value=c.text;
+    inp.dataset.role='check-text';
+    inp.dataset.evIdx=evIdx;
+    inp.dataset.dayIdx=curDay;
+    inp.dataset.checkIdx=ci;
+    inp.addEventListener('input',function(){c.text=this.value;saveToFirestore();});
+    inp.addEventListener('keydown',function(ev){
+      if(ev.key==='Enter'){ev.preventDefault();if(this.value.trim()===''){checks.splice(ci,1);renderChecklist(evs,evIdx,pid);saveToFirestore();return;}const ai=cl.querySelector('.add-check-input');if(ai)ai.focus();}
+      if(ev.key==='Backspace'&&this.value===''){ev.preventDefault();checks.splice(ci,1);renderChecklist(evs,evIdx,pid);saveToFirestore();}
+    });
+    inp.addEventListener('blur',function(){if(this.value.trim()===''){checks.splice(ci,1);renderChecklist(evs,evIdx,pid);saveToFirestore();}});
+    inp.addEventListener('keydown',function(ev){
+      if(ev.key==='Enter'){
+        ev.preventDefault();
+        if(this.value.trim()===''){checks.splice(ci,1);renderChecklist(evs,evIdx,pid);saveToFirestore();return;}
+        const ai=cl.querySelector('.add-check-input');if(ai)ai.focus();
+      }
+      if(ev.key==='Backspace'&&this.value===''){
+        ev.preventDefault();checks.splice(ci,1);renderChecklist(evs,evIdx,pid);saveToFirestore();
+      }
+    });
+    inp.addEventListener('blur',function(){
+      if(this.value.trim()===''){checks.splice(ci,1);renderChecklist(evs,evIdx,pid);saveToFirestore();}
+    });
+
+    // ── 📍チェックアイテム用ピンボタン ──
+    const cPinBtn=document.createElement('button');
+    cPinBtn.className='check-pin-btn';
+    const hasCPin=!!(c.pin&&c.pin.lat);
+    const cPinColor=PIN_COLORS[(evIdx*10+ci)%PIN_COLORS.length];
+    cPinBtn.innerHTML=makePinSvg(hasCPin?cPinColor:'#ccc',hasCPin?14:11);
+    cPinBtn.title=hasCPin?'長押しで解除':'ピンを設置';
+    (function(c_ref, cidx, col, btn){
+      // 長押し → ピン解除
+      let cPinLong=null;
+      btn.addEventListener('pointerdown',ev=>{
+        if(!c_ref.pin) return;
+        cPinLong=setTimeout(()=>{
+          cPinLong=null;
+          exitMapPlacingMode();
+          c_ref.pin=null;
+          const mk=mapMarkers['c-'+evIdx+'-'+cidx];
+          if(mk&&lMap){lMap.removeLayer(mk);delete mapMarkers['c-'+evIdx+'-'+cidx];}
+          btn.innerHTML=makePinSvg('#ccc',11);
+          btn.title='ピンを設置';
+          if(navigator.vibrate)navigator.vibrate([30,20,60]);
+          showToast('📍 ピンを解除しました');
+          saveToFirestore();
+        },900);
+      });
+      btn.addEventListener('pointerup',()=>{if(cPinLong){clearTimeout(cPinLong);cPinLong=null;}});
+      btn.addEventListener('pointercancel',()=>{if(cPinLong){clearTimeout(cPinLong);cPinLong=null;}});
+      // タップ → 選択開始 or キャンセル
+      btn.addEventListener('click',ev=>{
+        ev.stopPropagation();
+        // すでに選択中ならキャンセル
+        if(_placingPinBtn===btn){exitMapPlacingMode();return;}
+        // 地図未初期化ならマップを開く
+        if(!lMap){initMapIfNeeded();}
+        setPinBtnSelecting(btn);
+        // チェックアイテム用として enterMapPlacingMode
+        enterMapPlacingMode(evIdx, col, {
+          isCheck: true,
+          checkRef: c_ref,
+          onPlace: (latlng)=>{
+            // マーカー追加
+            const icon2=L.divIcon({
+              className:'lf-cpin-'+evIdx+'-'+cidx,
+              html:`<div style="width:16px;height:16px;background:${col};border:2px solid #fff;border-radius:50%;box-shadow:0 2px 6px rgba(0,0,0,.4)"></div>`,
+              iconSize:[16,16],iconAnchor:[8,8],popupAnchor:[0,-10],
+            });
+            const cm=L.marker([latlng.lat,latlng.lng],{icon:icon2}).addTo(lMap);
+            cm.bindPopup(`<div style="font-family:'M PLUS Rounded 1c',sans-serif;white-space:nowrap;font-size:11px"><span style="display:inline-block;width:7px;height:7px;background:${col};border-radius:50%;margin-right:4px;vertical-align:middle"></span>${c_ref.text||''}</div>`,{closeButton:false});
+            const oldKey='c-'+evIdx+'-'+cidx;
+            if(mapMarkers[oldKey]&&lMap){lMap.removeLayer(mapMarkers[oldKey]);}
+            mapMarkers[oldKey]=cm;
+            btn.innerHTML=makePinSvg(col,14);
+            btn.title='長押しで解除';
+          }
+        });
+      });
+    })(c, ci, cPinColor, cPinBtn);
+
+    // ── 📷画像ボタン (SVG版) ──
+    const camBtn=document.createElement('button');
+    camBtn.className='check-img-btn';
+    camBtn.innerHTML=makeCamSvg('#3b82f6',14);
+    camBtn.addEventListener('click',e=>{
+      e.stopPropagation();
+      const fileIn=document.createElement('input');
+      fileIn.type='file';fileIn.accept='image/*';fileIn.style.display='none';
+      document.body.appendChild(fileIn);
+      fileIn.addEventListener('change',async()=>{
+        if(!fileIn.files[0]){fileIn.remove();return;}
+        camBtn.innerHTML='⏳';
+        try{
+          const b64=await readFileAsBase64(fileIn.files[0]);
+          c.img=b64;
+          fileIn.remove();
+          renderChecklist(evs,evIdx,pid);
+          saveToFirestore();
+        }catch(err){
+          camBtn.innerHTML=makeCamSvg('#3b82f6',14);
+          fileIn.remove();
+          showToast('画像の読み込みに失敗しました');
+        }
+      });
+      fileIn.click();
+    });
+
+    row.appendChild(box);row.appendChild(inp);row.appendChild(cPinBtn);row.appendChild(camBtn);
+    cl.appendChild(row);
+
+    // ── 画像がある場合: Vボタン行＋展開エリア ──
+    if(c.img){
+      const imgKey = `${evs[evIdx].id || evIdx}-${ci}`; // イベントIDと項目のインデックスで一意に特定
+      const isImgOpen = !!expandedCheckImgState[imgKey];
+      
+      const toggleRow=document.createElement('div');toggleRow.className='img-toggle-row';
+
+      const vBtn=document.createElement('button');
+      vBtn.className='img-v-btn'+(isImgOpen?' open':'');
+      vBtn.style.touchAction = 'manipulation';
+      vBtn.innerHTML=makeVIcon(isImgOpen); // 自作Vアイコン関数
+
+      const lbl=document.createElement('span');
+      lbl.className='img-toggle-label';
+      lbl.textContent=' 写真を表示';
+
+      const expand=document.createElement('div');
+      expand.className='img-expand'+(isImgOpen?' open':'');
+
+      const inner=document.createElement('div');inner.className='img-expand-inner';
+
+      const imgEl=document.createElement('img');
+      imgEl.src=c.img;imgEl.alt='添付写真';
+      imgEl.loading='eager'; // 読み込みを最優先
+      imgEl.crossOrigin='anonymous';
+      
+      // 画像タップで全画面表示（モーダル）へ
+      imgEl.addEventListener('click',e=>{
+        e.stopPropagation();
+        const modal=document.getElementById('imgModal');
+        const mImg=document.getElementById('modalImg');
+        
+        mImg.src=c.img;
+        mImg.loading='eager'; 
+        mImg.crossOrigin='anonymous';
+        mImg.style.transform='scale(1)';// 初期化
+
+        document.body.classList.add('modal-open');
+        modal.classList.add('open');
+      });
+
+      const delImgBtn=document.createElement('button');
+      delImgBtn.className='img-del-btn';delImgBtn.textContent='✕';
+      delImgBtn.addEventListener('click',e=>{
+        e.stopPropagation();
+        delete expandedCheckImgState[imgKey];
+        c.img=null;
+        renderChecklist(evs,evIdx,pid);saveToFirestore();
+      });
+
+      vBtn.addEventListener('click',e=>{
+        e.stopPropagation();
+        expandedCheckImgState[imgKey] = !expandedCheckImgState[imgKey];
+        renderChecklist(evs,evIdx,pid); // 状態を反映して再描画
+      });
+      lbl.addEventListener('click',()=>vBtn.click());
+
+      inner.appendChild(imgEl);inner.appendChild(delImgBtn);
+      expand.appendChild(inner);
+      toggleRow.appendChild(vBtn);toggleRow.appendChild(lbl);
+      cl.appendChild(toggleRow);
+      cl.appendChild(expand);
+    }
+  });
+
+  // ── ＋追加行 ──
+  const ar=document.createElement('div');ar.className='add-check';
+  const plus=document.createElement('span');
+  plus.textContent='＋';
+  plus.style.cssText='font-size:14px;color:#3b82f6;flex-shrink:0;font-family:"M PLUS Rounded 1c",sans-serif';
+  const ai=document.createElement('input');ai.className='add-check-input';ai.placeholder='やることを追加';
+  ai.dataset.role='add-check';
+  ai.dataset.evIdx=evIdx;
+  ai.dataset.dayIdx=curDay;
+  
+  // ── ＋保存 ──
+  function commitAddCheck(imgB64){
+    const val=ai.value.trim(); if(!val && !imgB64) return;
+    checks.push({text:val||'写真',done:false,img:imgB64||null});
+    ai.value='';
+    renderChecklist(evs,evIdx,pid);
+    saveToFirestore();
+    setTimeout(()=>{
+      const inputs=cl.querySelectorAll('.add-check-input');
+      if(inputs.length)inputs[inputs.length-1].focus();
+    },30);
+  }
+
+  // ── ＋📷ボタン (SVG版) ──
+  const aCam=document.createElement('button');
+  aCam.className='check-img-btn';
+  aCam.innerHTML=makeCamSvg('#3b82f6',14);
+  aCam.style.marginLeft='auto';
+  aCam.addEventListener('click',e=>{
+    e.stopPropagation();
+    const fileIn=document.createElement('input');
+    fileIn.type='file';fileIn.accept='image/*';fileIn.style.display='none';
+    document.body.appendChild(fileIn);
+    fileIn.addEventListener('change',async()=>{
+      if(!fileIn.files[0]){fileIn.remove();return;}
+      aCam.innerHTML='⏳';
+      try{
+        const b64=await readFileAsBase64(fileIn.files[0]);
+        fileIn.remove();
+        commitAddCheck(b64);
+      }catch(err){
+        aCam.innerHTML=makeCamSvg('#3b82f6',14);fileIn.remove();
+        showToast('画像の読み込みに失敗しました');
+      }
+    });
+    fileIn.click();
+  });
+
+  ai.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();commitAddCheck();}});
+  ar.appendChild(plus);ar.appendChild(ai);ar.appendChild(aCam);cl.appendChild(ar);
+}
+
+function makeCamSvg(color,size){
+  size=size||18;
+  return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M23 19C23 20.1046 22.1046 21 21 21H3C1.89543 21 1 20.1046 1 19V8C1 6.89543 1.89543 6 3 6H7L9 3H15L17 6H21C22.1046 6 23 6.89543 23 8V19Z" stroke="${color}" stroke-width="2.5" stroke-linejoin="round"/>
+    <circle cx="12" cy="13" r="4" stroke="${color}" stroke-width="2.5"/>
+  </svg>`;
+}
+
+function makeVIcon(isOpen){
+  // 以前はここでtransformをしていましたが、CSSの .open クラスで回転させるように統一します
+  return `<svg width="10" height="6" viewBox="0 0 10 6" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M1 1L5 5L9 1" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  </svg>`;
+}
+
+// ── 🖼️ 画像モーダルのズーム＆スクロール制御 ──
+(function(){
+  const modal = document.getElementById('imgModal');
+  const mImg = document.getElementById('modalImg');
+  let startDist = 0;
+  let currentScale = 1;
+  let isZooming = false;
+
+  // モーダルを閉じる処理
+  function closeModal(){
+    modal.classList.remove('open');
+    document.body.classList.remove('modal-open');
+    mImg.style.transform = 'scale(1)';
+    currentScale = 1;
+  }
+
+  modal.addEventListener('click', e => {
+    if(!isZooming) closeModal();
+  });
+
+  mImg.addEventListener('touchstart', e => {
+    if (e.touches.length === 2) {
+      isZooming = true;
+      startDist = Math.hypot(e.touches[0].pageX - e.touches[1].pageX, e.touches[0].pageY - e.touches[1].pageY);
+    }
+  }, {passive: false});
+
+  mImg.addEventListener('touchmove', e => {
+    if (e.touches.length === 2) {
+      e.preventDefault();
+      const dist = Math.hypot(e.touches[0].pageX - e.touches[1].pageX, e.touches[0].pageY - e.touches[1].pageY);
+      const zoom = dist / startDist;
+      let newScale = currentScale * zoom;
+      if(newScale < 0.5) newScale = 0.5;
+      if(newScale > 5) newScale = 5;
+      mImg.style.transform = `scale(${newScale})`;
+    }
+  }, {passive: false});
+
+  mImg.addEventListener('touchend', e => {
+    if (e.touches.length < 2 && isZooming) {
+      const transform = mImg.style.transform;
+      const match = transform.match(/scale\(([^)]+)\)/);
+      if(match) currentScale = parseFloat(match[1]);
+      setTimeout(() => { isZooming = false; }, 100);
+    }
+  });
+})();
+
+// ════════════════════════════════════════════════════════════
+//  マップ機能
+// ════════════════════════════════════════════════════════════
+
+function makePinSvg(color,size){
+  size=size||18;
+  const h=Math.round(size*36/28);
+  return `<svg width="${size}" height="${h}" viewBox="0 0 28 36" xmlns="http://www.w3.org/2000/svg">
+    <path d="M14 0C6.27 0 0 6.27 0 14c0 10.5 14 22 14 22S28 24.5 28 14C28 6.27 21.73 0 14 0z"
+      fill="${color}" stroke="#fff" stroke-width="2.5"/>
+    <circle cx="14" cy="14" r="5.5" fill="#fff" opacity=".88"/>
+  </svg>`;
+}
+
+function initMapIfNeeded(){
+  // Leaflet が未ロードなら動的にロード
+  if(typeof L==='undefined'){
+    const s=document.createElement('script');
+    s.src='https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js';
+    s.onload=initLeafletMap;
+    s.onerror=()=>console.warn('Leaflet読み込み失敗');
+    document.head.appendChild(s);
+  } else {
+    initLeafletMap();
+  }
+}
+
+function initLeafletMap(){
+  if(lMap) return; // 二重初期化防止
+
+  // localStorageから前回位置を復元
+  let initC=MAP_DEFAULT_CENTER, initZ=11;
+  try{
+    const saved=JSON.parse(localStorage.getItem('mapPos'));
+    if(saved){initC=[saved.lat,saved.lng];initZ=saved.zoom;}
+  }catch(e){}
+
+  lMap=L.map('leafletMap',{center:initC,zoom:initZ,zoomControl:false,attributionControl:true});
+  currentTile=L.tileLayer(MAP_TILES.voyager,{maxZoom:22,subdomains:'abcd'}).addTo(lMap);
+  setTimeout(()=>lMap.invalidateSize(),120);
+
+  // 移動のたびにlocalStorageへ保存
+  lMap.on('moveend zoomend',()=>{
+    try{
+      const c=lMap.getCenter();
+      localStorage.setItem('mapPos',JSON.stringify({lat:c.lat,lng:c.lng,zoom:lMap.getZoom()}));
+    }catch(e){}
+  });
+
+  // ── 地図長押し → ピン設置（ドラッグで微調整） ──
+  let _mapLongTimer=null;
+  let _mapDraggingPin=false;
+  let _mapTempMarker=null;
+
+  function _removeTempMarker(){
+    if(_mapTempMarker){lMap.removeLayer(_mapTempMarker);_mapTempMarker=null;}
+  }
+
+  function _placePinAt(latlng){
+    const idx=mapPlacingIdx;
+    if(idx===null)return;
+
+    if(_placingIsCheck && _placingCheckRef){
+      // チェックアイテム用
+      _placingCheckRef.pin={lat:latlng.lat,lng:latlng.lng};
+      if(_placingCheckOnPlace) _placingCheckOnPlace(latlng);
+    } else {
+      const ev=days[curDay]?.events[idx];
+      if(!ev)return;
+      ev.pin={lat:latlng.lat,lng:latlng.lng};
+      addMapMarker(idx,latlng.lat,latlng.lng);
+      // 📍ボタン＋ドラッグハンドル更新
+      const color=PIN_COLORS[idx%PIN_COLORS.length];
+      const evWraps=document.querySelectorAll('#timelineArea .ev-wrap');
+      if(evWraps[idx]){
+        const pb=evWraps[idx].querySelector('.map-pin-btn');
+        if(pb){pb.innerHTML=makePinSvg(color,18);pb.title='長押しで解除';}
+        const hd=evWraps[idx].querySelector('.drag-handle');
+        if(hd) hd.style.background=color;
+      }
+    }
+    _removeTempMarker();
+    exitMapPlacingMode(true);
+    if(navigator.vibrate) navigator.vibrate([30,20,60]);
+    saveToFirestore();
+  }
+
+  // タッチ長押し検出 → 500ms長押しで即ピン確定（iOSでdragendが来ないためシンプル方式）
+  lMap.on('mousedown touchstart',e=>{
+    if(mapPlacingIdx===null) return;
+    clearTimeout(_mapLongTimer);
+    _mapDraggingPin=false;
+    const latlng=e.latlng;
+    _mapLongTimer=setTimeout(()=>{
+      _mapLongTimer=null;
+      if(navigator.vibrate) navigator.vibrate(50);
+      _placePinAt(latlng);
+    },600);
+  });
+
+  lMap.on('mouseup touchend',e=>{
+    clearTimeout(_mapLongTimer);
+    _mapLongTimer=null;
+    _mapDraggingPin=false;
+  });
+
+  lMap.on('mousemove touchmove',e=>{
+    // 長押し中に指が動いたらキャンセル（誤設置防止）
+    if(_mapLongTimer){clearTimeout(_mapLongTimer);_mapLongTimer=null;}
+  });
+
+  // クリック（短押し）はピン設置モード中は何もしない（誤設置防止）
+  lMap.on('click',e=>{
+    if(mapPlacingIdx===null) return;
+  });
+
+  // 既存ピンを配置
+  const evs=getEvents();
+  evs.forEach((ev,i)=>{if(ev.pin)addMapMarker(i,ev.pin.lat,ev.pin.lng);});
+
+  initMapPip();
+  initMapSearch();
+}
+
+function addMapMarker(evIdx,lat,lng){
+  if(mapMarkers[evIdx])lMap.removeLayer(mapMarkers[evIdx]);
+  const color=PIN_COLORS[evIdx%PIN_COLORS.length];
+  const icon=L.divIcon({
+    className:'lf-pin-'+evIdx,
+    html:`<div style="width:22px;height:22px;background:${color};border:2.5px solid #fff;border-radius:50% 50% 50% 0;transform:rotate(-45deg);box-shadow:0 2px 8px rgba(0,0,0,.4)"></div>`,
+    iconSize:[22,22],iconAnchor:[11,22],popupAnchor:[0,-24],
+  });
+  const m=L.marker([lat,lng],{icon}).addTo(lMap);
+  const evs=getEvents();
+  m.bindPopup(
+    `<div style="font-family:'M PLUS Rounded 1c',sans-serif;white-space:nowrap">
+      <span style="display:inline-block;width:8px;height:8px;background:${color};border-radius:50%;margin-right:5px;vertical-align:middle"></span>
+      ${evs[evIdx]?.name||''}
+    </div>`,
+    {closeButton:false,maxWidth:220}
+  );
+  m.on('click',()=>onMapPinClick(evIdx));
+  mapMarkers[evIdx]=m;
+}
+
+function activateMapPin(evIdx){
+  const color=PIN_COLORS[evIdx%PIN_COLORS.length];
+  if(mapMarkers[evIdx]){
+    const aIcon=L.divIcon({
+      className:'lf-pin-'+evIdx,
+      html:`<div style="width:26px;height:26px;background:#fff;border:3.5px solid ${color};border-radius:50% 50% 50% 0;transform:rotate(-45deg);box-shadow:0 2px 10px rgba(0,0,0,.5)"></div>`,
+      iconSize:[26,26],iconAnchor:[13,26],popupAnchor:[0,-28],
+    });
+    mapMarkers[evIdx].setIcon(aIcon);
+  }
+  const evs=getEvents();
+  evs[evIdx].open=true;
+  const cl=document.getElementById('cl-main-'+evIdx);
+  const btn=document.getElementById('lt-main-'+evIdx);
+  if(cl)cl.className='checklist open';
+  if(btn){btn.className='list-toggle open';btn.textContent='−';}
+  // スクロール
+  const wrapEls=document.querySelectorAll('#timelineArea .ev-wrap');
+  if(wrapEls[evIdx])wrapEls[evIdx].scrollIntoView({behavior:'smooth',block:'center'});
+  // flyTo
+  const pin=evs[evIdx]?.pin;
+  if(pin&&lMap){
+    if(mapPipState===0){mapPipState=2;applyMapPipState();}
+    setTimeout(()=>{
+      lMap.flyTo([pin.lat,pin.lng],17,{duration:1});
+      setTimeout(()=>{if(mapMarkers[evIdx])mapMarkers[evIdx].openPopup();},1100);
+    },mapPipState>0?0:450);
+  }
+  mapActiveEvIdx=evIdx;
+}
+
+function deactivateMapPin(evIdx){
+  const color=PIN_COLORS[evIdx%PIN_COLORS.length];
+  if(mapMarkers[evIdx]){
+    const nIcon=L.divIcon({
+      className:'lf-pin-'+evIdx,
+      html:`<div style="width:22px;height:22px;background:${color};border:2.5px solid #fff;border-radius:50% 50% 50% 0;transform:rotate(-45deg);box-shadow:0 2px 8px rgba(0,0,0,.4)"></div>`,
+      iconSize:[22,22],iconAnchor:[11,22],popupAnchor:[0,-24],
+    });
+    mapMarkers[evIdx].setIcon(nIcon);
+    if(mapMarkers[evIdx].isPopupOpen())mapMarkers[evIdx].closePopup();
+  }
+  const evs=getEvents();
+  evs[evIdx].open=false;
+  const cl=document.getElementById('cl-main-'+evIdx);
+  const btn=document.getElementById('lt-main-'+evIdx);
+  if(cl)cl.className='checklist';
+  if(btn){btn.className='list-toggle';btn.textContent='≡';}
+  mapActiveEvIdx=null;
+}
+
+function onMapPinClick(evIdx){
+  if(mapActiveEvIdx===evIdx){
+    deactivateMapPin(evIdx);
+  } else {
+    if(mapActiveEvIdx!==null)deactivateMapPin(mapActiveEvIdx);
+    activateMapPin(evIdx);
+  }
+}
+
+// ピン設置モードの管理
+let _placingPinBtn=null; // 現在選択中のピンボタン要素
+let _placingColor=null;  // 選択中の色
+let _placingIsCheck=false; // チェックアイテム用か
+let _placingCheckRef=null; // チェックアイテムの参照
+let _placingCheckOnPlace=null; // 設置完了時コールバック
+
+// ボタン点滅アニメCSS（一度だけ挿入）
+(function(){
+  const s=document.createElement('style');
+  s.textContent=`@keyframes pinBtnPulse{0%,100%{transform:scale(1);filter:brightness(1)}50%{transform:scale(1.3);filter:brightness(1.4)}} .pin-selecting{animation:pinBtnPulse .7s ease-in-out infinite!important}`;
+  document.head.appendChild(s);
+})();
+
+function enterMapPlacingMode(evIdx, color, opts){
+  // opts: {isCheck, checkRef, onPlace} チェックアイテム用オプション
+  mapPlacingIdx=evIdx;
+  _placingColor=color;
+  _placingIsCheck=!!(opts&&opts.isCheck);
+  _placingCheckRef=opts?.checkRef||null;
+  _placingCheckOnPlace=opts?.onPlace||null;
+
+  // 地図を拡大
+  if(mapPipState<1){mapPipState=1; applyMapPipState();}
+
+  setTimeout(()=>{
+    const pip=document.getElementById('mapPip');
+    const ph=document.getElementById('placeHint');
+    const mh=document.getElementById('mapHint');
+    pip.classList.add('placing');
+    if(ph){ph.style.display='flex';}
+    if(mh) mh.style.display='none';
+    const pin=!_placingIsCheck ? getEvents()[evIdx]?.pin : _placingCheckRef?.pin;
+    if(pin&&lMap) lMap.flyTo([pin.lat,pin.lng],17,{duration:.8});
+  },mapPipState>0?50:430);
+}
+
+function exitMapPlacingMode(keepOpen){
+  mapPlacingIdx=null;
+  _placingIsCheck=false;
+  _placingCheckRef=null;
+  _placingCheckOnPlace=null;
+  _placingColor=null;
+  if(_placingPinBtn){_placingPinBtn.classList.remove('pin-selecting');_placingPinBtn=null;}
+  const pip=document.getElementById('mapPip');
+  const ph=document.getElementById('placeHint');
+  const mh=document.getElementById('mapHint');
+  if(pip) pip.classList.remove('placing');
+  if(ph) ph.style.display='none';
+  if(mh) mh.style.display='block';
+  // keepOpen=trueのとき（ピン設置成功）は地図サイズそのまま、それ以外はsize-0に戻す
+  if(!keepOpen && mapPipState>0){mapPipState=0;applyMapPipState();}
+}
+
+// キャンセルボタン用グローバル関数
+window.cancelPinPlacing=function(){
+  exitMapPlacingMode();
+};
+
+// ピンボタンを「選択状態」にする
+function setPinBtnSelecting(btn){
+  if(_placingPinBtn&&_placingPinBtn!==btn) _placingPinBtn.classList.remove('pin-selecting');
+  _placingPinBtn=btn;
+  if(btn) btn.classList.add('pin-selecting');
+}
+
+function changeMapStyle(btn){
+  document.querySelectorAll('.style-chip').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  if(lMap&&currentTile){
+    lMap.removeLayer(currentTile);
+    currentTile=L.tileLayer(MAP_TILES[btn.dataset.style],{maxZoom:22,subdomains:'abcd'}).addTo(lMap);
+  }
+}
+// グローバルに公開（onclick属性から呼ぶため）
+window.changeMapStyle=changeMapStyle;
+
+function applyMapPipState(){
+  const pip=document.getElementById('mapPip');
+  const hint=document.getElementById('mapHint');
+  const s=PIP_STATES[mapPipState];
+  pip.classList.remove('size-1','size-2');
+  if(s.cls)pip.classList.add(s.cls);
+  if(hint)hint.textContent=s.hint;
+  if(mapPipState===0){
+    mapPickerOpen=false;
+    document.getElementById('styleBar').classList.remove('show');
+  }
+  const srch=document.getElementById('mapSearch');
+  if(srch){
+    srch.classList.toggle('show',mapPipState>0);
+    // size-2(最大)時: 検索バーをマップの下端（bottom: calc(50vh + 20px + 8px)）に
+    if(mapPipState===2){
+      srch.style.bottom='calc(95vh + 30px)';
+    } else {
+      srch.style.bottom='108px';
+    }
+  }
+  setTimeout(()=>{
+    if(lMap){
+      lMap.invalidateSize();
+    }
+  },420);
+}
+
+function initMapPip(){
+  const pip=document.getElementById('mapPip');
+  const palBtn=document.getElementById('palBtn');
+  const styleBar=document.getElementById('styleBar');
+  if(!pip||!palBtn) return;
+
+  // マップにタッチ中は背後のページスクロールを防ぐ
+  // ※ touchstartはLeafletに通す（stopPropagationしない）
+  // 水平スワイプ（日付移動）は許可し、垂直スクロールのみ防止
+  let mapTouchStart = null;
+  pip.addEventListener('touchstart',e=>{
+    if(mapPipState>0){
+      mapTouchStart = {x: e.touches[0].clientX, y: e.touches[0].clientY};
+    }
+  },{passive:true});
+  
+  pip.addEventListener('touchmove',e=>{
+    if(mapPipState>0 && mapTouchStart){
+      const dx = Math.abs(e.touches[0].clientX - mapTouchStart.x);
+      const dy = Math.abs(e.touches[0].clientY - mapTouchStart.y);
+      // 水平方向の移動が大きい場合（日付スワイプ）は preventDefault しない
+      // 垂直方向の移動が大きい場合（地図スクロール）のみ preventDefault
+      if(dy > dx * 1.5){
+        e.preventDefault();
+      }
+    }
+  },{passive:false});
+  
+  pip.addEventListener('touchend',()=>{
+    mapTouchStart = null;
+  },{passive:true});
+
+  let ptStart=null;
+
+  pip.addEventListener('pointerdown',e=>{
+    if(e.target===palBtn||e.target.closest('.pip-pal'))return;
+    ptStart={x:e.clientX,y:e.clientY};
+  });
+  pip.addEventListener('pointerup',e=>{
+    if(!ptStart)return;
+    const dist=Math.hypot(e.clientX-ptStart.x,e.clientY-ptStart.y);
+    if(dist<8&&mapPlacingIdx===null){
+      mapPipState=(mapPipState+1)%PIP_STATES.length;
+      applyMapPipState();
+    }
+    ptStart=null;
+  });
+  palBtn.addEventListener('click',e=>{
+    e.stopPropagation();
+    if(mapPipState===0)return;
+    mapPickerOpen=!mapPickerOpen;
+    styleBar.classList.toggle('show',mapPickerOpen);
+  });
+  document.addEventListener('click',e=>{
+    if(!pip.contains(e.target)&&!styleBar.contains(e.target)){
+      mapPickerOpen=false;styleBar.classList.remove('show');
+    }
+  });
+}
+
+function initMapSearch(){
+  const inp=document.getElementById('searchInput');
+  const iconBtn=document.getElementById('searchIconBtn');
+  const srch=document.getElementById('mapSearch');
+  if(!inp||!iconBtn)return;
+
+  // 虫眼鏡ボタン: 展開/折りたたみ ＋ 展開中は検索実行
+  iconBtn.addEventListener('click',e=>{
+    e.stopPropagation();
+    if(srch.classList.contains('expanded')){
+      // 展開中→検索実行 or 折りたたみ
+      const q=inp.value.trim();
+      if(q){ doSearch(); }
+      else { srch.classList.remove('expanded'); }
+    } else {
+      srch.classList.add('expanded');
+      setTimeout(()=>inp.focus(),320);
+    }
+  });
+
+  // マップPiP外タップで折りたたむ
+  document.addEventListener('click',e=>{
+    if(!srch.contains(e.target)) srch.classList.remove('expanded');
+  });
+
+  function doSearch(){
+    const q=inp.value.trim();
+    if(!q)return;
+    iconBtn.textContent='…';
+    fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=1`,
+      {headers:{'Accept-Language':'ja','User-Agent':'Tabi-Shiori-App'}})
+    .then(r=>r.json())
+    .then(data=>{
+      iconBtn.textContent='🔍';
+      if(data&&data.length>0){
+        lMap.flyTo([parseFloat(data[0].lat),parseFloat(data[0].lon)],15,{duration:1.2});
+        srch.classList.remove('expanded');
+        inp.value='';
+      } else {
+        showToast('場所が見つかりませんでした');
+      }
+    })
+    .catch(()=>{ iconBtn.textContent='🔍'; });
+  }
+  inp.addEventListener('keydown',e=>{if(e.key==='Enter')doSearch();});
+}
+
+// renderTimeline後にマーカーを再同期する
+function syncMapMarkers(){
+  if(!lMap)return;
+  // 既存マーカーを全削除
+  Object.values(mapMarkers).forEach(m=>lMap.removeLayer(m));
+  mapMarkers={};
+  mapActiveEvIdx=null;
+  const evs=getEvents();
+  evs.forEach((ev,i)=>{
+    if(ev.pin) addMapMarker(i,ev.pin.lat,ev.pin.lng);
+    // チェックアイテムのピンも再同期
+    if(ev.checks){
+      ev.checks.forEach((c,ci)=>{
+        if(c.pin&&c.pin.lat){
+          const col=PIN_COLORS[(i*10+ci)%PIN_COLORS.length];
+          const icon2=L.divIcon({
+            className:'lf-cpin-'+i+'-'+ci,
+            html:`<div style="width:16px;height:16px;background:${col};border:2px solid #fff;border-radius:50%;box-shadow:0 2px 6px rgba(0,0,0,.4)"></div>`,
+            iconSize:[16,16],iconAnchor:[8,8],popupAnchor:[0,-10],
+          });
+          const cm=L.marker([c.pin.lat,c.pin.lng],{icon:icon2}).addTo(lMap);
+          cm.bindPopup(`<div style="font-family:'M PLUS Rounded 1c',sans-serif;white-space:nowrap;font-size:11px"><span style="display:inline-block;width:7px;height:7px;background:${col};border-radius:50%;margin-right:4px;vertical-align:middle"></span>${c.text||''}</div>`,{closeButton:false});
+          mapMarkers['c-'+i+'-'+ci]=cm;
+        }
+      });
+    }
+  });
+}
+
+function renderTimeline(){
+  // 全ての一時的なUI要素をクリーンアップ
+  exitJiggle(); // jiggleモードを確実に解除
+  hideAllAddBtns(); // 追加ボタンを非表示
+  exitMapPlacingMode(); // ピン設置モードを解除
+  
+  const tl=document.getElementById('timelineArea');
+  tl.innerHTML='';
+  renderTimelineInto(tl, getEvents(), curDay);
+  syncMapMarkers(); // マップピンを再同期
+  // トラック位置をリセット（スライドアニメ完了後）
+  setTrackX(0,false);
+  // 隣接ペインをサイレント更新
+  const panePrev=document.getElementById('panePrev');
+  const paneNext=document.getElementById('paneNext');
+  if(panePrev) renderPaneContent(panePrev, curDay-1);
+  if(paneNext){
+    const overlay=document.getElementById('createOverlay');
+    if(curDay < days.length-1){
+      renderPaneContent(paneNext, curDay+1);
+    } else {
+      paneNext.innerHTML='';
+      if(overlay){ paneNext.appendChild(overlay); overlay.style.opacity='0'; overlay.style.minHeight='200px'; }
+    }
+  }
+}
+
+function renderTimelineInto(tl, evs, dayIdx){
+  const isMainPane = (tl === document.getElementById('timelineArea'));
+  const paneId = isMainPane ? 'main' : ('p'+dayIdx); // ユニークなIDプレフィックス
+  if(!days.length){
+    if(isMainPane) tl.innerHTML='<div class="empty-hint"><div class="big">—</div>上の「日程を追加」から始めましょう</div>';
+    if(isMainPane) setupDragDrop();return;
+  }
+  if(!evs.length){
+    const hint=document.createElement('div');
+    hint.className='empty-hint';
+    hint.innerHTML='<div class="big">＋</div>この余白を長押しして<br>最初のイベントを追加';
+    hint.style.cursor='pointer';
+    if(isMainPane){
+      let lpT=null;
+      hint.addEventListener('touchstart',()=>{lpT=setTimeout(()=>{getEvents().push(mkEvent('新しいイベント',null,60));renderTimeline();saveToFirestore();},500);},{passive:true});
+      hint.addEventListener('touchend',()=>clearTimeout(lpT));
+      hint.addEventListener('mousedown',()=>{lpT=setTimeout(()=>{getEvents().push(mkEvent('新しいイベント',null,60));renderTimeline();saveToFirestore();},500);});
+      hint.addEventListener('mouseup',()=>clearTimeout(lpT));
+    }
+    tl.appendChild(hint);
+    if(isMainPane) setupDragDrop();return;
+  }
+
+  const {times,durs,warns}=computeTimes(evs);
+  const allDurs=durs.slice(0,-1).map(d=>d??0);
+  const maxDV=Math.max(...allDurs.filter(d=>d>0),60);
+
+  function makeDZ(ins){const dz=document.createElement('div');dz.className='drop-zone';dz.dataset.insert=ins;return dz;}
+
+  evs.forEach((e,i)=>{
+    if(!e||typeof e!=='object') return; // null/undefinedイベントをスキップ
+    const isLast=i===evs.length-1;
+    const tStr=fmtT(times[i]);
+    const isFixed=!!e.fixedTime;
+
+    tl.appendChild(makeDZ(i));
+
+    const wrap=document.createElement('div');wrap.className='ev-wrap';wrap.style.position='relative';
+    const row=document.createElement('div');row.className='ev-row';
+
+    const left=document.createElement('div');left.className='ev-left';
+    const timeEl=document.createElement('div');
+    timeEl.className='ev-time'+(isFixed?' fixed':'');timeEl.textContent=tStr;
+    timeEl.addEventListener('click',ev=>{ev.stopPropagation();openTimePopup(i,timeEl);});
+    left.appendChild(timeEl);
+
+    const right=document.createElement('div');right.className='ev-right';
+    const card=document.createElement('div');card.className='ev-card';
+    const handle=document.createElement('div');handle.className='drag-handle';
+    handle.textContent='⠿';
+    // ピンが設置済みの場合のみ色付き、未設置はグレー
+    const pinColor=PIN_COLORS[i%PIN_COLORS.length];
+    const hasPinNow=!!(e.pin&&e.pin.lat);
+    handle.style.background=hasPinNow?pinColor:'#c8c8c8';
+
+    const nameIn=document.createElement('input');nameIn.className='ev-name';nameIn.placeholder='イベント名';nameIn.value=e.name;
+    nameIn.dataset.evIdx=i; nameIn.dataset.role='name'; nameIn.dataset.dayIdx=dayIdx;
+    nameIn.addEventListener('input',function(){evs[i].name=this.value;saveToFirestore();});
+    nameIn.addEventListener('mousedown',ev=>ev.stopPropagation());
+    nameIn.addEventListener('touchstart',ev=>ev.stopPropagation(),{passive:true});
+
+    // 📍ボタン（SVGピン）
+    const pinBtn=document.createElement('button');
+    pinBtn.className='map-pin-btn';
+    const hasPinAlready=!!(e.pin&&e.pin.lat);
+    pinBtn.title=hasPinAlready?'ピンを移動 / 長押しで解除':'ピンを設置';
+    pinBtn.innerHTML=makePinSvg(hasPinAlready?pinColor:'#ccc',hasPinAlready?18:14);
+    if(isMainPane){
+      (function(idx,col){
+        pinBtn.addEventListener('click',ev=>{
+          ev.stopPropagation();
+          // すでに選択中なら→キャンセル
+          if(mapPlacingIdx===idx && _placingPinBtn===pinBtn){
+            exitMapPlacingMode();
+            return;
+          }
+          // ピン選択開始
+          setPinBtnSelecting(pinBtn);
+          enterMapPlacingMode(idx,col);
+        });
+        // 長押し（1秒）でピン解除
+        let pinLongTimer=null;
+        pinBtn.addEventListener('pointerdown',ev=>{
+          if(!(days[curDay]?.events[idx]?.pin)) return;
+          pinLongTimer=setTimeout(()=>{
+            pinLongTimer=null;
+            exitMapPlacingMode();
+            const ev2=days[curDay]?.events[idx];
+            if(!ev2)return;
+            ev2.pin=null;
+            if(mapMarkers[idx]){lMap.removeLayer(mapMarkers[idx]);delete mapMarkers[idx];}
+            pinBtn.innerHTML=makePinSvg('#ccc',14);
+            pinBtn.title='ピンを設置';
+            const hw=document.querySelectorAll('#timelineArea .ev-wrap');
+            if(hw[idx]){const h=hw[idx].querySelector('.drag-handle');if(h)h.style.background='#c8c8c8';}
+            if(navigator.vibrate)navigator.vibrate([30,20,60]);
+            showToast('📍 ピンを解除しました');
+            saveToFirestore();
+          },900);
+        });
+        pinBtn.addEventListener('pointerup',()=>{if(pinLongTimer){clearTimeout(pinLongTimer);pinLongTimer=null;}});
+        pinBtn.addEventListener('pointercancel',()=>{if(pinLongTimer){clearTimeout(pinLongTimer);pinLongTimer=null;}});
+      })(i,pinColor);
+    }
+
+    // listBtn と delBtn を状態で切り替え
+    const listBtn=document.createElement('button');listBtn.id='lt-'+paneId+'-'+i;
+    listBtn.className='list-toggle'+(e.open?' open':'');listBtn.textContent=e.open?'−':'≡';
+    listBtn.addEventListener('mousedown',ev=>ev.stopPropagation());
+    listBtn.addEventListener('touchstart',ev=>ev.stopPropagation(),{passive:true});
+    listBtn.addEventListener('click',ev=>{ev.stopPropagation();if(!wrap.classList.contains('jiggle'))toggleList(evs,i,paneId);});
+
+    const delBtn=document.createElement('button');delBtn.className='ev-del-btn';delBtn.textContent='✕';
+    delBtn.style.display='none';
+    delBtn.addEventListener('mousedown',ev=>ev.stopPropagation());
+    delBtn.addEventListener('touchstart',ev=>ev.stopPropagation(),{passive:true});
+    delBtn.addEventListener('click',ev=>{
+      ev.stopPropagation();
+      exitJiggle();
+      days[curDay].events.splice(i,1);
+      renderTimeline();saveToFirestore();
+    });
+
+    card.appendChild(handle);card.appendChild(nameIn);card.appendChild(pinBtn);card.appendChild(listBtn);card.appendChild(delBtn);
+    right.appendChild(card);
+
+    // カードタップ → その場所へflyTo
+    if(isMainPane){
+      (function(idx){
+        card.addEventListener('click',ev=>{
+          if(ev.target===nameIn||ev.target===pinBtn||ev.target===listBtn||ev.target===delBtn||ev.target===handle)return;
+          const pin=days[curDay]?.events[idx]?.pin;
+          if(pin&&lMap){
+            if(mapPipState===0){mapPipState=2;applyMapPipState();}
+            const delay=mapPipState>0?0:450;
+            setTimeout(()=>{
+              lMap.flyTo([pin.lat,pin.lng],17,{duration:1.2});
+              setTimeout(()=>{if(mapMarkers[idx])mapMarkers[idx].openPopup();},1300);
+            },delay);
+          }
+        });
+      })(i);
+    }
+
+    // jiggle状態の切り替え関数
+    wrap._enterJiggle=()=>{
+      wrap.classList.add('jiggle');
+      listBtn.style.display='none';
+      pinBtn.style.display='none';
+      delBtn.style.display='flex';
+      if(navigator.vibrate)navigator.vibrate([30,20,60]);
+    };
+    wrap._exitJiggle=()=>{
+      wrap.classList.remove('jiggle');
+      listBtn.style.display='flex';
+      pinBtn.style.display='flex';
+      delBtn.style.display='none';
+    };
+
+    const cl=document.createElement('div');cl.id='cl-'+paneId+'-'+i;cl.className='checklist'+(e.open?' open':'');
+    row.appendChild(left);row.appendChild(right);
+    wrap.appendChild(row);
+    wrap.appendChild(cl);
+    tl.appendChild(wrap);
+    if(isMainPane) renderChecklist(evs,i,paneId);
+
+    if(!isLast){
+      const dur=durs[i]??0;
+      const barH=Math.max(20,Math.round((dur/maxDV)*80));
+      const conn=document.createElement('div');conn.className='connector';conn.style.minHeight=(barH+28)+'px';
+      const cL=document.createElement('div');cL.className='conn-left';
+      const bc=document.createElement('div');bc.className='conn-bar-col';bc.style.height='100%';
+      const bar=document.createElement('div');bar.className='conn-bar';
+      bc.appendChild(bar);cL.appendChild(bc);
+      const cR=document.createElement('div');cR.className='conn-right';
+      const btn=document.createElement('button');
+      // 警告判定: computeTimes の warns 配列を使用
+      const isWarn=warns[i]===true;
+      // 表示する所要時間: computeTimes が自動配分した値（アンカーと整合済み）
+      const dispDur=durs[i]!=null?durs[i]:null;
+      // 施錠表示: ユーザーが手動でロックした場合のみ
+      const showLock=evs[i].durLocked;
+      btn.className='dur-btn'+(showLock?' locked':'')+(isWarn?' warn':'');
+      btn.innerHTML=`<span style="font-size:10px;opacity:.7">▼</span>${showLock?'<span style="font-size:10px;margin-right:1px">🔒</span>':''}<span>${dispDur!=null?dispDur:'?'}分</span>${isWarn?'<span style="font-size:10px;margin-left:2px">⚠️</span>':''}`;
+      // 常に所要時間ピッカーを開けるようにする（固定時刻間でも編集可能）
+      btn.addEventListener('click',ev=>{ev.stopPropagation();openDurPicker(i,btn);});
+
+      // ＋ボタン（長押し後出現、ドラッグして挿入）
+      const addBtn=document.createElement('button');
+      addBtn.className='conn-add-btn';
+      addBtn.textContent='＋';
+      addBtn.dataset.insertIdx=String(i+1);
+      cR.appendChild(btn);cR.appendChild(addBtn);
+      conn.appendChild(cL);conn.appendChild(cR);tl.appendChild(conn);
+    }
+  });
+
+  const lastDZ=makeDZ(evs.length);
+  lastDZ.style.minHeight='64px';
+  lastDZ.style.margin='0 52px 4px';
+  tl.appendChild(lastDZ);
+  if(isMainPane) setupDragDrop();
+}
+
+document.getElementById('tripName').addEventListener('input', saveToFirestore);
+
+// ページ離脱時に保留中の変更を即座に保存（400ms待たずに）
+window.addEventListener('pagehide', ()=>{
+  if(saveTimer!==null){
+    clearTimeout(saveTimer);
+    saveTimer=null;
+    // 同期的に送信（保証はできないがベストエフォート）
+    setDoc(doc(db,'trips',tripId),{
+      days: JSON.parse(JSON.stringify(days)),
+      tripName: document.getElementById('tripName').value,
+      ts: Date.now()
+    }).catch(()=>{});
+  }
+});
+
+document.getElementById('copyUrlBtn').addEventListener('click', (e) => {
+  e.preventDefault();
+  const url = location.href;
+  if (navigator.clipboard && window.isSecureContext) {
+    navigator.clipboard.writeText(url).then(() => {
+      alert('URLをコピーしました！メモ帳に貼り付けてください。\n\n' + url);
+    }).catch(err => {
+      alert('コピーに失敗しました。手動でコピーしてください:\n\n' + url);
+    });
+  } else {
+    // 古いiOSや非SSL環境向けのフォールバック
+    const textArea = document.createElement("textarea");
+    textArea.value = url;
+    textArea.style.position = "fixed";
+    textArea.style.left = "-999999px";
+    textArea.style.top = "-999999px";
+    document.body.appendChild(textArea);
+    textArea.focus();
+    textArea.select();
+    try {
+      document.execCommand('copy');
+      alert('URLをコピーしました！メモ帳に貼り付けてください。\n\n' + url);
+    } catch (err) {
+      alert('コピーに失敗しました。手動でコピーしてください:\n\n' + url);
+    }
+    textArea.remove();
+  }
+});
+
+// iOSの長押しメニューを入力欄以外で完全無効化
+document.addEventListener('contextmenu',e=>{
+  if(!e.target.closest('input,textarea')) e.preventDefault();
+});
+
+// ── プルトゥリフレッシュ ─────────────────────────────────
+(function(){
+  const PTR_SHOW=60;    // この距離でインジケーター表示
+  const PTR_COMMIT=160; // この距離で確定（約5cm）
+  const ind=document.getElementById('ptr-indicator');
+  let ptStartY=null,ptStartX=null,ptActive=false,ptLocked=false;
+
+  document.addEventListener('touchstart',e=>{
+    // ピッカーやポップアップが開いていたら無視
+    if(document.getElementById('durPicker').style.display==='block') return;
+    if(document.getElementById('timePopup').style.display==='block') return;
+    if(window.scrollY>5) return;
+    ptStartY=e.touches[0].clientY;
+    ptStartX=e.touches[0].clientX;
+    ptActive=false;
+    ptLocked=false;
+  },{passive:true});
+
+  document.addEventListener('touchmove',e=>{
+    if(ptStartY==null||window.scrollY>2) return;
+    const dy=e.touches[0].clientY-ptStartY;
+    const dx=Math.abs(e.touches[0].clientX-ptStartX);
+    // 横方向の動きが大きければ水平スワイプなので無視
+    if(!ptLocked && dx>dy*0.6) { ptStartY=null; return; }
+    if(dy<PTR_SHOW) return;
+    ptLocked=true;
+    ptActive=true;
+    if(dy>PTR_COMMIT){
+      ind.textContent='↻ 離してリロード';ind.className='ready';
+    } else {
+      ind.textContent='↓ もっと引っ張る';ind.className='pulling';
+    }
+  },{passive:true});
+
+  document.addEventListener('touchend',e=>{
+    if(!ptActive){ptStartY=null;ptStartX=null;ind.className='';return;}
+    const dy=e.changedTouches[0].clientY-ptStartY;
+    ptStartY=null;ptStartX=null;ptActive=false;ptLocked=false;
+    if(dy>PTR_COMMIT){
+      ind.textContent='↻ リロード中…';ind.className='ready';
+      setTimeout(()=>location.reload(),400);
+    } else {
+      ind.className='';
+    }
+  },{passive:true});
+})();
+</script>
+</body>
+</html>
