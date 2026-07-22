@@ -8,7 +8,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<!-- v20260722-14 -->
+<!-- v20260722-15 -->
 <title>旅のしおり</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -125,25 +125,51 @@ body::before{
 }
 .nav-btn:active{background:rgba(255,255,255,.22);transform:scale(.9)}
 
+/* ── ロック切替ボタン ── */
+.app-lock-btn {
+  background: transparent;
+  border: none;
+  font-size: 20px;
+  cursor: pointer;
+  padding: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  touch-action: manipulation;
+  color: #fff;
+  transition: transform 0.2s;
+}
+.app-lock-btn:active { transform: scale(0.85); }
+
+function toggleAppLock() {
+  const body = document.body;
+  body.classList.toggle('locked');
+  body.classList.toggle('unlocked');
+}
+
+/* ── 編集モード（ロック解除時）のスタイル ── */
+body.unlocked .ev-del-btn { display: flex; }
+body.unlocked .conn-add-btn { display: flex; }
+body.unlocked .del-trip-btn { display: flex; }
+body.unlocked .list-toggle-btn { display: none; }
+body.locked .ev-del-btn { display: none; }
+body.locked .conn-add-btn { display: none; }
+body.locked .del-trip-btn { display: none; }
+body.locked .add-check { display: none !important; }
+body.locked .check-img-btn { display: none !important; }
+body.locked .check-pin-btn { display: none !important; }
+body.locked .img-del-btn { display: none !important; }
+
 .date-center{flex:1;text-align:center;min-width:0}
 .date-display{font-size:17px;font-weight:700;color:#fff;line-height:1.2}
 .day-label{font-size:11px;color:rgba(255,255,255,.55);margin-top:1px;font-family:'M PLUS Rounded 1c',sans-serif}
 
-/* 削除モード */
-.ev-wrap.jiggle .ev-card{
-  background:#fff0f0;
-  outline:2px solid rgba(255,59,48,.35);
-  outline-offset:1px;
-}
-@keyframes del-pulse{0%,100%{opacity:1}50%{opacity:.7}}
-.ev-wrap.jiggle .ev-del-btn{animation:del-pulse 1.2s ease-in-out infinite}
-
-/* 削除ボタン：list-toggleと同位置、jiggle時に差し替え */
+/* 削除ボタン：list-toggleと同位置 */
 .ev-del-btn{
   width:26px;height:26px;border-radius:50%;border:none;
   background:#ff3b30;color:#fff;
   font-size:15px;font-weight:900;line-height:1;
-  cursor:pointer;display:flex;align-items:center;justify-content:center;
+  cursor:pointer;display:none;align-items:center;justify-content:center;
   flex-shrink:0;touch-action:manipulation;
   box-shadow:0 2px 6px rgba(255,59,48,.45);
 }
@@ -344,13 +370,6 @@ body::before{
   /* background は JS でイベントごとに設定 */
 }
 .drag-handle:active{cursor:grabbing}
-@keyframes handle-pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.7;transform:scale(1.18)}}
-.ev-wrap.jiggle .drag-handle{animation:handle-pulse 1s ease-in-out infinite}
-
-
-
-
-
 
 .ev-name{font-size:14px;font-weight:500;color:#1a1a1a;background:transparent;border:none;outline:none;flex:1;font-family:'M PLUS Rounded 1c',sans-serif;min-width:0}
 .ev-name::placeholder{color:#ccc;font-weight:400}
@@ -566,6 +585,12 @@ body.modal-open{overflow:hidden}
 .trip-item:active { background: #f9f9f9; transform: scale(0.98); }
 .trip-item-name { font-size: 16px; font-weight: 700; color: #333; }
 .trip-item-date { font-size: 12px; color: #888; margin-top: 4px; }
+.del-trip-btn {
+  background: #ff3b30; color: #fff; border: none; width: 36px; height: 36px; border-radius: 10px;
+  display: none; align-items: center; justify-content: center; cursor: pointer;
+  touch-action: manipulation; font-size: 16px; flex-shrink: 0; margin-left: 12px;
+}
+.del-trip-btn:active { transform: scale(0.9); }
 
 /* ── 戻るFAB（左下固定） ── */
 .fab-back {
@@ -658,8 +683,11 @@ body.modal-open{overflow:hidden}
 <body>
 
 <div id="homeView">
-  <div class="home-header">マイトリップ</div>
-    <div class="trip-list" id="tripList"></div>
+  <div class="home-header">
+    <span>マイトリップ</span>
+    <button class="app-lock-btn" id="homeLockBtn" onclick="toggleAppLock()">🔒</button>
+  </div>
+  <div class="trip-list" id="tripList"></div>
 </div>
 
 
@@ -671,8 +699,8 @@ body.modal-open{overflow:hidden}
   <div class="app-head" id="appHead">
     <div class="trip-name-row collapsible">
       <div style="width:52px"></div>
-      <input class="trip-name" id="tripName" value="旅のしおり" placeholder="旅行名">
-      <div style="width:52px"></div>
+      <input class="trip-name" id="tripName" value="旅のしおり" placeholder="旅行名" readonly>
+      <button class="app-lock-btn" id="appLockBtn" onclick="toggleAppLock()">🔒</button>
     </div>
     <div class="date-nav">
       <button class="nav-btn" id="prevDay">‹</button>
@@ -751,14 +779,31 @@ body.modal-open{overflow:hidden}
 </div>
 
 <script type="module">
+let isAppLocked = true;
+window.toggleAppLock = () => {
+  isAppLocked = !isAppLocked;
+  document.body.classList.toggle('locked', isAppLocked);
+  document.body.classList.toggle('unlocked', !isAppLocked);
+  document.getElementById('homeLockBtn').textContent = isAppLocked ? '🔒' : '🔓';
+  const appLockBtn = document.getElementById('appLockBtn');
+  if (appLockBtn) appLockBtn.textContent = isAppLocked ? '🔒' : '🔓';
+  
+  // Set readonly on inputs based on lock state
+  document.querySelectorAll('.ev-name, .trip-name, .check-text').forEach(el => {
+    if (isAppLocked) el.setAttribute('readonly', 'true');
+    else el.removeAttribute('readonly');
+  });
+};
+// 初期化時にロック状態を適用
+document.addEventListener('DOMContentLoaded', () => {
+  document.body.classList.add(isAppLocked ? 'locked' : 'unlocked');
+});
+
 window.onerror = function(msg) {
-  // STOP_EXECUTIONはホーム画面の意図的な処理停止
   if(msg && msg.includes('STOP_EXECUTION')) return true;
-  // その他のエラーはコンソールに記録するだけ（赤い画面は表示しない）
   return false;
 };
 window.addEventListener('unhandledrejection', function(event) {
-  // Promiseエラーもコンソールに記録するだけ
   console.warn('Unhandled rejection:', event.reason);
   event.preventDefault();
 });
@@ -857,27 +902,27 @@ if (isHome) {
     a.href = '#' + t.id;
     a.onclick = () => { setTimeout(() => location.reload(), 10); };
     
-    // 長押しで削除
-    let _longTimer = null;
-    a.addEventListener('pointerdown', () => {
-      _longTimer = setTimeout(() => {
-        _longTimer = null;
-        openTripDelete(t.id, t.name);
-      }, 700);
-    });
-    a.addEventListener('pointerup', () => { clearTimeout(_longTimer); _longTimer = null; });
-    a.addEventListener('pointercancel', () => { clearTimeout(_longTimer); _longTimer = null; });
-    
     const d = new Date(t.ts);
     const dateStr = d.getFullYear() + '/' + (d.getMonth()+1) + '/' + d.getDate() + ' ' + d.getHours() + ':' + d.getMinutes().toString().padStart(2,'0');
     
     a.innerHTML = `
-      <div>
+      <div style="flex:1; min-width:0;">
         <div class="trip-item-name">${t.name}</div>
         <div class="trip-item-date">最終更新: ${dateStr}</div>
       </div>
       <div style="color:#2E7D78; font-weight:bold; font-size:20px;">›</div>
     `;
+    
+    const delBtn = document.createElement('button');
+    delBtn.className = 'del-trip-btn';
+    delBtn.innerHTML = '🗑️';
+    delBtn.onclick = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      openTripDelete(t.id, t.name);
+    };
+    a.appendChild(delBtn);
+    
     listEl.appendChild(a);
   });
   
@@ -2142,6 +2187,7 @@ function renderChecklist(evs,evIdx,paneId){
     const inp=document.createElement('input');
     inp.className='check-text'+(c.done?' done':'');
     inp.value=c.text;
+    if (isAppLocked) inp.setAttribute('readonly', 'true');
     inp.dataset.role='check-text';
     inp.dataset.evIdx=evIdx;
     inp.dataset.dayIdx=curDay;
@@ -2467,14 +2513,13 @@ function renderTimelineInto(tl, evs, dayIdx){
   if(!evs.length){
     const hint=document.createElement('div');
     hint.className='empty-hint';
-    hint.innerHTML='<div class="big">＋</div>この余白を長押しして<br>最初のイベントを追加';
+    hint.innerHTML='<div class="big">＋</div>最初のイベントを追加';
     hint.style.cursor='pointer';
     if(isMainPane){
-      let lpT=null;
-      hint.addEventListener('touchstart',()=>{lpT=setTimeout(()=>{getEvents().push(mkEvent('新しいイベント',null,60));renderTimeline();saveToFirestore();},500);},{passive:true});
-      hint.addEventListener('touchend',()=>clearTimeout(lpT));
-      hint.addEventListener('mousedown',()=>{lpT=setTimeout(()=>{getEvents().push(mkEvent('新しいイベント',null,60));renderTimeline();saveToFirestore();},500);});
-      hint.addEventListener('mouseup',()=>clearTimeout(lpT));
+      hint.addEventListener('click', () => {
+        getEvents().push(mkEvent('新しいイベント',null,60));
+        renderTimeline(); saveToFirestore(true);
+      });
     }
     tl.appendChild(hint);
     if(isMainPane) setupDragDrop();return;
@@ -2513,28 +2558,26 @@ function renderTimelineInto(tl, evs, dayIdx){
     handle.style.background=hasPinNow?pinColor:'#c8c8c8';
 
     const nameIn=document.createElement('input');nameIn.className='ev-name';nameIn.placeholder='イベント名';nameIn.value=e.name;
+    if (isAppLocked) nameIn.setAttribute('readonly', 'true');
     nameIn.dataset.evIdx=i; nameIn.dataset.role='name'; nameIn.dataset.dayIdx=dayIdx;
     nameIn.addEventListener('input',function(){evs[i].name=this.value;saveToFirestore();});
     nameIn.addEventListener('mousedown',ev=>ev.stopPropagation());
     nameIn.addEventListener('touchstart',ev=>ev.stopPropagation(),{passive:true});
 
     
-    // listBtn と delBtn を状態で切り替え
     const listBtn=document.createElement('button');listBtn.id='lt-'+paneId+'-'+i;
     listBtn.className='list-toggle'+(e.open?' open':'');listBtn.textContent=e.open?'−':'≡';
     listBtn.addEventListener('mousedown',ev=>ev.stopPropagation());
     listBtn.addEventListener('touchstart',ev=>ev.stopPropagation(),{passive:true});
-    listBtn.addEventListener('click',ev=>{ev.stopPropagation();if(!wrap.classList.contains('jiggle'))toggleList(evs,i,paneId);});
+    listBtn.addEventListener('click',ev=>{ev.stopPropagation();toggleList(evs,i,paneId);});
 
     const delBtn=document.createElement('button');delBtn.className='ev-del-btn';delBtn.textContent='✕';
-    delBtn.style.display='none';
     delBtn.addEventListener('mousedown',ev=>ev.stopPropagation());
     delBtn.addEventListener('touchstart',ev=>ev.stopPropagation(),{passive:true});
     delBtn.addEventListener('click',ev=>{
       ev.stopPropagation();
-      exitJiggle();
       days[curDay].events.splice(i,1);
-      renderTimeline();saveToFirestore();
+      renderTimeline();saveToFirestore(true);
     });
 
     card.appendChild(handle);card.appendChild(nameIn);card.appendChild(listBtn);card.appendChild(delBtn);
@@ -2558,18 +2601,6 @@ function renderTimelineInto(tl, evs, dayIdx){
       })(i);
     }
 
-    // jiggle状態の切り替え関数
-    wrap._enterJiggle=()=>{
-      wrap.classList.add('jiggle');
-      listBtn.style.display='none';
-      delBtn.style.display='flex';
-      if(navigator.vibrate)navigator.vibrate([30,20,60]);
-    };
-    wrap._exitJiggle=()=>{
-      wrap.classList.remove('jiggle');
-      listBtn.style.display='flex';
-      delBtn.style.display='none';
-    };
 
     const cl=document.createElement('div');cl.id='cl-'+paneId+'-'+i;cl.className='checklist'+(e.open?' open':'');
     row.appendChild(left);row.appendChild(right);
@@ -2618,6 +2649,28 @@ function renderTimelineInto(tl, evs, dayIdx){
       conn.appendChild(cL);conn.appendChild(cR);tl.appendChild(conn);
     }
   });
+
+  if(isMainPane && evs.length > 0){
+    const appendBtn = document.createElement('button');
+    appendBtn.className = 'conn-add-btn';
+    appendBtn.style.position = 'relative';
+    appendBtn.style.left = '0';
+    appendBtn.style.transform = 'none';
+    appendBtn.style.margin = '20px auto 40px';
+    appendBtn.style.width = '160px';
+    appendBtn.style.height = '40px';
+    appendBtn.style.borderRadius = '20px';
+    appendBtn.textContent = '＋ イベントを追加';
+    appendBtn.addEventListener('click', () => {
+      days[curDay].events.push(mkEvent('新しいイベント',null,60));
+      renderTimeline(); saveToFirestore(true);
+      setTimeout(()=>{
+        const ns=document.querySelectorAll('.ev-name');
+        if(ns.length>0){ ns[ns.length-1].focus(); ns[ns.length-1].select(); }
+      },50);
+    });
+    tl.appendChild(appendBtn);
+  }
 
   const lastDZ=makeDZ(evs.length);
   lastDZ.style.minHeight='64px';
