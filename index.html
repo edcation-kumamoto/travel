@@ -567,7 +567,7 @@ body.modal-open{overflow:hidden}
 .trip-item:active { background: #f9f9f9; transform: scale(0.98); }
 .trip-item-name { font-size: 16px; font-weight: 700; color: #333; }
 .trip-item-date { font-size: 12px; color: #888; margin-top: 4px; }
-.back-home-btn { background: rgba(255,255,255,0.2); border: none; color: #fff; padding: 4px 10px; border-radius: 12px; font-size: 12px; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; touch-action: manipulation; z-index: 10; margin-right: 4px; }
+.back-home-btn { background: rgba(255,255,255,0.2); border: none; color: #fff; padding: 4px 8px; border-radius: 12px; font-size: 11px; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; touch-action: manipulation; z-index: 10; }
 
 
 /* ── 新規旅行作成FAB ── */
@@ -648,10 +648,10 @@ body.modal-open{overflow:hidden}
 <div class="app" id="app">
   <div class="app-head" id="appHead">
     <div class="trip-name-row collapsible" style="position:relative;">
+      <button class="back-home-btn" onclick="goHome()" style="position:absolute; left:0; top:50%; transform:translateY(-50%); margin:0;">‹ 戻る</button>
       <input class="trip-name" id="tripName" value="旅のしおり" placeholder="旅行名">
     </div>
     <div class="date-nav">
-      <button class="back-home-btn" onclick="goHome()">戻る</button>
       <button class="nav-btn" id="prevDay">‹</button>
       <div class="date-center">
         <div class="date-display" id="dateDisplay">—</div>
@@ -765,6 +765,13 @@ function initMapPip(){}
 function initMapSearch(){}
 function initMapIfNeeded(){}
 function changeMapStyle(){}
+
+let _placingPinBtn = null;
+function exitMapPlacingMode(){}
+function enterMapPlacingMode(){}
+function setPinBtnSelecting(){}
+function applyMapPipState(){}
+
 
 let tripId = location.hash.slice(1);
 const isHome = !tripId || tripId === 'home';
