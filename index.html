@@ -8,7 +8,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<!-- v20260722-11 -->
+<!-- v20260722-12 -->
 <title>旅のしおり</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -566,7 +566,33 @@ body.modal-open{overflow:hidden}
 .trip-item:active { background: #f9f9f9; transform: scale(0.98); }
 .trip-item-name { font-size: 16px; font-weight: 700; color: #333; }
 .trip-item-date { font-size: 12px; color: #888; margin-top: 4px; }
-.back-home-btn { background: rgba(255,255,255,0.2); border: none; color: #fff; padding: 6px 10px; border-radius: 12px; font-size: 12px; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; touch-action: manipulation; min-height: 36px; min-width: 52px; flex-shrink: 0; }
+
+/* ── 戻るFAB（左下固定） ── */
+.fab-back {
+  position: fixed;
+  bottom: 24px;
+  left: 18px;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: #2E7D78;
+  color: #fff;
+  border: none;
+  font-size: 26px;
+  font-weight: 900;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 18px rgba(20,80,76,.45);
+  cursor: pointer;
+  z-index: 500;
+  touch-action: manipulation;
+  line-height: 1;
+  transition: transform .15s, box-shadow .15s;
+}
+.fab-back:active { transform: scale(0.92); box-shadow: 0 2px 8px rgba(20,80,76,.3); }
+.fab-back.visible { display: flex; }
+
 
 
 /* ── 新規旅行作成FAB ── */
@@ -647,7 +673,7 @@ body.modal-open{overflow:hidden}
 <div class="app" id="app">
   <div class="app-head" id="appHead">
     <div class="trip-name-row collapsible">
-      <button class="back-home-btn" onclick="goHome()">‹ 戻る</button>
+      <div style="width:52px"></div>
       <input class="trip-name" id="tripName" value="旅のしおり" placeholder="旅行名">
       <div style="width:52px"></div>
     </div>
@@ -678,6 +704,9 @@ body.modal-open{overflow:hidden}
     </div>
   </div>
 </div>
+
+<!-- 戻るFAB（左下固定） -->
+<button class="fab-back" id="fabBack" onclick="goHome()">‹</button>
 
 <!-- 日程削除確認ポップアップ -->
 <div class="del-day-popup" id="delDayPopup">
@@ -820,7 +849,10 @@ if (isHome) {
   document.getElementById('app').style.display = 'none';
   document.getElementById('ptr-indicator').style.display = 'none';
   document.getElementById('fabNewTrip').classList.add('visible');
-  
+  // 戻るFABはホーム画面では非表示
+  const fabBackEl = document.getElementById('fabBack');
+  if(fabBackEl) fabBackEl.style.display = 'none';
+
   const listEl = document.getElementById('tripList');
   savedTrips.sort((a,b) => b.ts - a.ts).forEach(t => {
     const a = document.createElement('a');
@@ -862,6 +894,9 @@ if (isHome) {
     existing.ts = Date.now();
   }
   localStorage.setItem('my_trips', JSON.stringify(savedTrips));
+  // スケジュール画面では戻るFABを表示
+  const fabBackEl = document.getElementById('fabBack');
+  if(fabBackEl) fabBackEl.classList.add('visible');
 }
 
 
