@@ -1151,7 +1151,18 @@ function applyRemoteSnap(snap){
     days = remoteDays;
     // 既存データにevLockedフィールドがない場合はfalse（ロック解除）をデフォルトにする
     days.forEach(d=>d.events.forEach(e=>{ if(e.evLocked===undefined) e.evLocked=false; }));
-    if(data.tripName) document.getElementById('tripName').value = data.tripName;
+    
+    if(data.tripName) {
+      document.getElementById('tripName').value = data.tripName;
+      // 受信した名前を自分のlocalStorage（ホーム画面用）にも反映させる
+      let trips = JSON.parse(localStorage.getItem('my_trips') || '[]');
+      const t = trips.find(x => x.id === tripId);
+      if (t) {
+        t.name = data.tripName;
+        localStorage.setItem('my_trips', JSON.stringify(trips));
+      }
+    }
+    
     days.forEach(d=>d.events.forEach(e=>{if(e.id>=nextId)nextId=e.id+1;}));
     curDay = Math.min(curDay, Math.max(0, days.length-1));
 
