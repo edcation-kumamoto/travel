@@ -800,7 +800,7 @@ document.getElementById('tripDeleteConfirm').addEventListener('click', () => {
 });
 window.goHome = () => {
   location.hash = 'home';
-  location.reload();
+  setTimeout(() => location.reload(), 10);
 };
 
 if (isHome) {
