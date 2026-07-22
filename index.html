@@ -1165,7 +1165,16 @@ function applyRemoteSnap(snap){
 let initialLoadDone = false;
 let isLoadingInitialData = true; // 初期ロード中フラグを追加
 
+let _snapCount = 0;
+const _snapBadge = document.createElement('div');
+_snapBadge.style.cssText = 'position:fixed;bottom:120px;right:12px;background:#333;color:#0f0;padding:4px 8px;border-radius:8px;font-size:10px;z-index:9999;font-family:monospace';
+_snapBadge.textContent = 'snap: 0';
+document.body.appendChild(_snapBadge);
+
 onSnapshot(doc(db,'trips',tripId), snap => {
+  _snapCount++;
+  _snapBadge.textContent = `snap:${_snapCount} hw:${snap.metadata.hasPendingWrites?1:0} fc:${snap.metadata.fromCache?1:0}`;
+
   try {
     // ローカル書き込みのエコー（まだサーバー未確認）は無視
     if(snap.metadata.hasPendingWrites) return;
