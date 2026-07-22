@@ -8,7 +8,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<!-- v20260722-7 -->
+<!-- v20260722-8 -->
 <title>旅のしおり</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -776,7 +776,7 @@ const MAP_TILES = {};
 const PIP_STATES = [];
 const PIN_COLORS = [];
 function addMapMarker(){}
-function makePinSvg(){ return ''; }
+
 function initMapPip(){}
 function initMapSearch(){}
 function initMapIfNeeded(){}
@@ -2395,51 +2395,6 @@ function makePinSvg(color,size){
   </svg>`;
 }
 
-  const inp=document.getElementById('searchInput');
-  const iconBtn=document.getElementById('searchIconBtn');
-  const srch=document.getElementById('mapSearch');
-  if(!inp||!iconBtn)return;
-
-  // 虫眼鏡ボタン: 展開/折りたたみ ＋ 展開中は検索実行
-  iconBtn.addEventListener('click',e=>{
-    e.stopPropagation();
-    if(srch.classList.contains('expanded')){
-      // 展開中→検索実行 or 折りたたみ
-      const q=inp.value.trim();
-      if(q){ doSearch(); }
-      else { srch.classList.remove('expanded'); }
-    } else {
-      srch.classList.add('expanded');
-      setTimeout(()=>inp.focus(),320);
-    }
-  });
-
-  // マップPiP外タップで折りたたむ
-  document.addEventListener('click',e=>{
-    if(!srch.contains(e.target)) srch.classList.remove('expanded');
-  });
-
-  function doSearch(){
-    const q=inp.value.trim();
-    if(!q)return;
-    iconBtn.textContent='…';
-    fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=1`,
-      {headers:{'Accept-Language':'ja','User-Agent':'Tabi-Shiori-App'}})
-    .then(r=>r.json())
-    .then(data=>{
-      iconBtn.textContent='🔍';
-      if(data&&data.length>0){
-        if(lMap) lMap.flyTo([parseFloat(data[0].lat),parseFloat(data[0].lon)],15,{duration:1.2});
-        srch.classList.remove('expanded');
-        inp.value='';
-      } else {
-        showToast('場所が見つかりませんでした');
-      }
-    })
-    .catch(()=>{ iconBtn.textContent='🔍'; });
-  }
-  inp.addEventListener('keydown',e=>{if(e.key==='Enter')doSearch();});
-}
 
 // renderTimeline後にマーカーを再同期する
 function syncMapMarkers(){
