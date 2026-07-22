@@ -1040,8 +1040,6 @@ function svgDurLock(){
 const clientId = crypto.randomUUID(); // このタブ固有ID
 
 let saveTimer = null;
-let localChangePending = false;
-let queuedSnap = null;
 
 // 描画中のスクロール飛びを防ぐ防水関数
 function withScrollGuard(fn){
@@ -1054,51 +1052,35 @@ function withScrollGuard(fn){
 }
 
 function saveToFirestore(immediate = false){
-  localChangePending = true;
   clearTimeout(saveTimer);
-  const currentName = document.getElementById('tripName').value;
-  const snapshot = {
-    days: JSON.parse(JSON.stringify(days)),
-    tripName: currentName,
-    ts: Date.now(),
-    _savedBy: clientId
-  };
-  
-  // localStorage の名前も更新
-  let trips = JSON.parse(localStorage.getItem('my_trips') || '[]');
-  const t = trips.find(x => x.id === tripId);
-  if (t) {
-    t.name = currentName;
-    t.ts = Date.now();
-    localStorage.setItem('my_trips', JSON.stringify(trips));
-  }
-  
   const doSave = async () => {
-    // 実際に保存する直前の最新の値をキャプチャする
-    const freshSnapshot = {
+    const snapshot = {
       days: JSON.parse(JSON.stringify(days)),
       tripName: document.getElementById('tripName').value,
       ts: Date.now(),
       _savedBy: clientId
     };
+    // localStorage の名前も更新
+    let trips = JSON.parse(localStorage.getItem('my_trips') || '[]');
+    const t = trips.find(x => x.id === tripId);
+    if (t) {
+      t.name = snapshot.tripName;
+      t.ts = Date.now();
+      localStorage.setItem('my_trips', JSON.stringify(trips));
+    }
     try{
-      await setDoc(doc(db,'trips',tripId), freshSnapshot);
+      await setDoc(doc(db,'trips',tripId), snapshot);
     } catch(err){
       console.error('save failed', err);
       showToast('⚠️ 保存失敗。ネット接続を確認してください。');
     }
     saveTimer = null;
-    localChangePending = false;
-    if(queuedSnap){
-      const s = queuedSnap; queuedSnap = null;
-      applyRemoteSnap(s);
-    }
   };
 
   if (immediate) {
     return doSave();
   } else {
-    saveTimer = setTimeout(doSave, 300);
+    saveTimer = setTimeout(doSave, 400);
   }
 }
 
@@ -1177,6 +1159,9 @@ let isLoadingInitialData = true; // 初期ロード中フラグを追加
 
 onSnapshot(doc(db,'trips',tripId), snap => {
   try {
+    // ローカル書き込みのエコー（まだサーバー未確認）は無視
+    if(snap.metadata.hasPendingWrites) return;
+
     if(!snap.exists()){
       if(initialLoadDone) return;
       initialLoadDone = true;
@@ -1189,14 +1174,6 @@ onSnapshot(doc(db,'trips',tripId), snap => {
       }];
       renderHeader();renderTimeline();
       saveToFirestore();
-      return;
-    }
-
-    // 自分が保存したものなら無視
-    if(snap.data()._savedBy === clientId) return;
-
-    if(localChangePending){
-      queuedSnap = snap;
       return;
     }
 
