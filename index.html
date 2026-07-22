@@ -8,7 +8,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<!-- v20260722-10 -->
+<!-- v20260722-11 -->
 <title>旅のしおり</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -725,20 +725,16 @@ body.modal-open{overflow:hidden}
 </div>
 
 <script type="module">
-window.onerror = function(msg, url, lineNo, columnNo, error) {
-  // 内部的なSTOPエラーは無視
+window.onerror = function(msg) {
+  // STOP_EXECUTIONはホーム画面の意図的な処理停止
   if(msg && msg.includes('STOP_EXECUTION')) return true;
-  const errDiv = document.createElement('div');
-  errDiv.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(255,0,0,0.9);color:white;padding:20px;z-index:999999;border-radius:10px;font-family:sans-serif;max-width:90%;word-break:break-all;';
-  errDiv.innerHTML = '<b>JS Error!</b><br>' + msg + '<br>Line: ' + lineNo + '<br>Col: ' + columnNo + '<br>' + (error ? error.stack : '');
-  document.body.appendChild(errDiv);
+  // その他のエラーはコンソールに記録するだけ（赤い画面は表示しない）
   return false;
 };
 window.addEventListener('unhandledrejection', function(event) {
-  const errDiv = document.createElement('div');
-  errDiv.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(255,0,0,0.9);color:white;padding:20px;z-index:999999;border-radius:10px;font-family:sans-serif;max-width:90%;word-break:break-all;';
-  errDiv.innerHTML = '<b>Promise Error!</b><br>' + event.reason;
-  document.body.appendChild(errDiv);
+  // Promiseエラーもコンソールに記録するだけ
+  console.warn('Unhandled rejection:', event.reason);
+  event.preventDefault();
 });
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
@@ -1005,42 +1001,43 @@ let initialLoadDone = false;
 let isLoadingInitialData = true; // 初期ロード中フラグを追加
 
 onSnapshot(doc(db,'trips',tripId), snap => {
-  // hasPendingWrites=true はローカル書き込みの即時エコー → 無視
-  if(snap.metadata.hasPendingWrites) return;
+  try {
+    // hasPendingWrites=true はローカル書き込みの即時エコー → 無視
+    if(snap.metadata.hasPendingWrites) return;
 
-  if(!snap.exists()){
-    if(initialLoadDone) return;
-    initialLoadDone = true;
-    isLoadingInitialData = false; // 初期ロード完了
-    days=[{
-      date:'10/10',
-      events:[
-        mkEvent('玉名出発','07:00',70),
-        mkEvent('駐車場',null,70),
-        mkEvent('空港・ラウンジ休憩',null,35),
-        mkEvent('飛行機チェックイン',null,60),
-        mkEvent('熊本発','06:35',105),
-        mkEvent('羽田着',null,35),
-        mkEvent('電車移動',null,0),
-        mkEvent('ホテル着',null,null),
-      ]
-    }];
-    renderHeader();renderTimeline();
-    saveToFirestore();
-    
-    return;
+    if(!snap.exists()){
+      if(initialLoadDone) return;
+      initialLoadDone = true;
+      isLoadingInitialData = false;
+      days=[{
+        date:'10/10',
+        events:[
+          mkEvent('玉名出発','07:00',70),
+          mkEvent('駐車場',null,70),
+          mkEvent('空港・ラウンジ休憩',null,35),
+          mkEvent('飛行機チェックイン',null,60),
+          mkEvent('熊本発','06:35',105),
+          mkEvent('羽田着',null,35),
+          mkEvent('電車移動',null,0),
+          mkEvent('ホテル着',null,null),
+        ]
+      }];
+      renderHeader();renderTimeline();
+      saveToFirestore();
+      return;
+    }
+
+    if(snap.data()._savedBy === clientId) return;
+
+    if(localChangePending){
+      queuedSnap = snap;
+      return;
+    }
+
+    applyRemoteSnap(snap);
+  } catch(err) {
+    console.error('onSnapshot error:', err);
   }
-
-  // 自分の書き込みのサーバー確認エコー → データはメモリに既にある、再描画不要
-  if(snap.data()._savedBy === clientId) return;
-
-  // 他ユーザーの変更 → localChangePending中は保留
-  if(localChangePending){
-    queuedSnap = snap;
-    return;
-  }
-
-  applyRemoteSnap(snap);
 });
 
 function getEvents(){return days[curDay]?days[curDay].events:[];}
