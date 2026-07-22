@@ -8,7 +8,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<!-- v20260722-9 -->
+<!-- v20260722-10 -->
 <title>旅のしおり</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -2508,14 +2508,14 @@ function renderTimelineInto(tl, evs, dayIdx){
       renderTimeline();saveToFirestore();
     });
 
-    card.appendChild(handle);card.appendChild(nameIn);card.appendChild(pinBtn);card.appendChild(listBtn);card.appendChild(delBtn);
+    card.appendChild(handle);card.appendChild(nameIn);card.appendChild(listBtn);card.appendChild(delBtn);
     right.appendChild(card);
 
     // カードタップ → その場所へflyTo
     if(isMainPane){
       (function(idx){
         card.addEventListener('click',ev=>{
-          if(ev.target===nameIn||ev.target===pinBtn||ev.target===listBtn||ev.target===delBtn||ev.target===handle)return;
+          if(ev.target===nameIn||ev.target===listBtn||ev.target===delBtn||ev.target===handle)return;
           const pin=days[curDay]?.events[idx]?.pin;
           if(pin&&lMap){
             if(mapPipState===0){mapPipState=2;applyMapPipState();}
@@ -2533,14 +2533,12 @@ function renderTimelineInto(tl, evs, dayIdx){
     wrap._enterJiggle=()=>{
       wrap.classList.add('jiggle');
       listBtn.style.display='none';
-      pinBtn.style.display='none';
       delBtn.style.display='flex';
       if(navigator.vibrate)navigator.vibrate([30,20,60]);
     };
     wrap._exitJiggle=()=>{
       wrap.classList.remove('jiggle');
       listBtn.style.display='flex';
-      pinBtn.style.display='flex';
       delBtn.style.display='none';
     };
 
