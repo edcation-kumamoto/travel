@@ -10,7 +10,6 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <!-- v20260404-1 -->
 <title>旅のしおり</title>
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;500;700;900&display=swap" rel="stylesheet">
@@ -349,97 +348,11 @@ body::before{
 @keyframes handle-pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.7;transform:scale(1.18)}}
 .ev-wrap.jiggle .drag-handle{animation:handle-pulse 1s ease-in-out infinite}
 
-/* ── 📍ボタン（SVGピン） ── */
-.map-pin-btn{
-  width:26px;height:26px;border-radius:50%;border:none;
-  background:transparent;cursor:pointer;
-  display:flex;align-items:center;justify-content:center;
-  flex-shrink:0;touch-action:manipulation;
-  transition:transform .15s;padding:0;
-}
-.map-pin-btn:active{transform:scale(.85)}
 
-/* ── マップ PiP ── */
-.map-pip{
-  position:fixed;bottom:20px;right:14px;
-  width:80px;height:80px;
-  border-radius:14px;overflow:hidden;
-  box-shadow:0 4px 24px rgba(0,0,0,.35);
-  z-index:500;background:#b8dbd9;cursor:pointer;
-  transition:width .4s cubic-bezier(.4,0,.2,1),
-             height .4s cubic-bezier(.4,0,.2,1),
-             border-radius .4s cubic-bezier(.4,0,.2,1);
-}
-.map-pip.size-1{width:calc(100vw - 28px);height:55vh;border-radius:18px}
-.map-pip.size-2{width:calc(100vw - 28px);height:95vh;border-radius:18px}
-@keyframes placingPulse{0%,100%{outline-color:#F5C842;box-shadow:0 0 0 0 rgba(245,200,66,.5)}50%{outline-color:#ff9500;box-shadow:0 0 0 8px rgba(245,200,66,.0)}}
-.map-pip.placing{outline:3px solid #F5C842;outline-offset:-3px;cursor:crosshair;animation:placingPulse 1.2s ease-in-out infinite}
-#leafletMap{width:100%;height:100%;position:absolute;top:0;left:0}
-.map-hint{position:absolute;bottom:5px;left:6px;background:rgba(0,0,0,.52);color:#fff;font-size:8px;padding:2px 7px;border-radius:8px;pointer-events:none;z-index:10;white-space:nowrap}
-.place-hint{position:absolute;top:7px;left:50%;transform:translateX(-50%);background:rgba(245,200,66,.95);color:#5a4500;font-size:10px;font-weight:700;padding:4px 10px;border-radius:10px;pointer-events:auto;z-index:11;white-space:nowrap;display:none;align-items:center;gap:4px}
-.pip-pal{position:absolute;top:5px;right:5px;background:rgba(255,255,255,.88);border:none;border-radius:8px;width:22px;height:22px;font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:11;box-shadow:0 1px 4px rgba(0,0,0,.25);touch-action:manipulation}
 
-/* ピンパルスアニメ */
-@keyframes pinPulse{0%,100%{transform:rotate(-45deg) scale(1)}50%{transform:rotate(-45deg) scale(1.5)}}
-.pin-active div{animation:pinPulse .45s ease-in-out 2}
 
-/* スタイルピッカー */
-.style-bar{position:fixed;bottom:148px;right:14px;display:flex;flex-direction:column;gap:5px;z-index:501;opacity:0;pointer-events:none;transition:opacity .2s}
-.style-bar.show{opacity:1;pointer-events:auto}
-.style-chip{padding:5px 11px;background:#fff;border:2px solid #ccc;border-radius:20px;font-size:11px;font-weight:700;cursor:pointer;color:#444;white-space:nowrap;font-family:'M PLUS Rounded 1c',sans-serif;box-shadow:0 2px 8px rgba(0,0,0,.15);touch-action:manipulation}
-.style-chip.active{border-color:#2E7D78;background:#2E7D78;color:#fff}
 
-/* 検索バー */
-.map-search{
-  position:fixed;bottom:108px;right:14px;
-  display:flex;align-items:center;flex-direction:row-reverse;
-  z-index:501;opacity:0;pointer-events:none;
-  transition:opacity .2s;
-}
-.map-search.show{opacity:1;pointer-events:auto}
-.map-search-icon-btn{
-  width:38px;height:38px;border:none;
-  background:#2E7D78;color:#fff;
-  border-radius:50%;
-  font-size:16px;cursor:pointer;
-  display:flex;align-items:center;justify-content:center;
-  flex-shrink:0;touch-action:manipulation;
-  box-shadow:0 2px 10px rgba(0,0,0,.3);
-  transition:background .15s, border-radius .3s;
-  z-index:1;
-}
-.map-search.expanded .map-search-icon-btn{border-radius:0 50% 50% 0}
-.map-search-icon-btn:active{background:#1a5c58}
-.map-search-expand{
-  display:flex;align-items:center;
-  background:#fff;
-  border-radius:20px 0 0 20px;
-  box-shadow:0 2px 12px rgba(0,0,0,.2);
-  overflow:hidden;
-  max-width:0;
-  transition:max-width .3s cubic-bezier(.4,0,.2,1), opacity .25s;
-  opacity:0;
-  pointer-events:none;
-}
-.map-search.expanded .map-search-expand{
-  max-width:180px;
-  opacity:1;
-  pointer-events:auto;
-}
-.map-search input{
-  border:none;outline:none;padding:7px 12px;
-  font-family:'M PLUS Rounded 1c',sans-serif;
-  font-size:12px;color:#333;width:150px;background:transparent;
-  -webkit-user-select:text;user-select:text;
-}
-.map-search input::placeholder{color:#aaa}
 
-/* Leaflet上書き */
-.leaflet-control-zoom{display:none!important}
-.leaflet-control-attribution{font-size:7px!important;opacity:.7}
-.leaflet-popup-content{font-family:'M PLUS Rounded 1c',sans-serif;font-size:12px;font-weight:700;margin:8px 12px}
-.leaflet-popup-content-wrapper{border-radius:12px!important;box-shadow:0 4px 16px rgba(0,0,0,.2)!important}
-.leaflet-popup-close-button{display:none!important}
 .ev-name{font-size:14px;font-weight:500;color:#1a1a1a;background:transparent;border:none;outline:none;flex:1;font-family:'M PLUS Rounded 1c',sans-serif;min-width:0}
 .ev-name::placeholder{color:#ccc;font-weight:400}
 .list-toggle{width:26px;height:26px;border-radius:50%;border:none;background:rgba(46,125,120,.1);color:#2E7D78;font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;touch-action:manipulation;font-weight:700;transition:all .15s}
@@ -656,14 +569,75 @@ body.modal-open{overflow:hidden}
 .trip-item-date { font-size: 12px; color: #888; margin-top: 4px; }
 .back-home-btn { background: rgba(255,255,255,0.2); border: none; color: #fff; padding: 4px 10px; border-radius: 12px; font-size: 12px; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; position: absolute; left: 14px; top: 12px; touch-action: manipulation; z-index: 10; }
 
+
+/* ── 新規旅行作成FAB ── */
+.fab-new-trip {
+  position: fixed;
+  bottom: 24px;
+  right: 18px;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: #2E7D78;
+  color: #fff;
+  border: none;
+  font-size: 28px;
+  font-weight: 300;
+  line-height: 1;
+  cursor: pointer;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 16px rgba(46,125,120,0.5);
+  z-index: 500;
+  touch-action: manipulation;
+  transition: transform 0.15s;
+}
+.fab-new-trip.visible { display: flex; }
+.fab-new-trip:active { transform: scale(0.92); }
+
+/* 削除確認オーバーレイ */
+.trip-delete-overlay {
+  position: fixed; top:0; left:0; right:0; bottom:0;
+  background: rgba(0,0,0,0.5);
+  display: none; align-items: center; justify-content: center;
+  z-index: 9000;
+}
+.trip-delete-overlay.show { display: flex; }
+.trip-delete-box {
+  background: #fff;
+  border-radius: 18px;
+  padding: 24px;
+  width: 80%;
+  max-width: 300px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+  font-family: 'M PLUS Rounded 1c', sans-serif;
+}
+.trip-delete-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #333;
+  margin-bottom: 18px;
+  text-align: center;
+}
+.trip-delete-btns { display: flex; gap: 10px; }
+.trip-delete-btn {
+  flex: 1; padding: 12px; border: none;
+  border-radius: 12px; font-size: 14px;
+  font-weight: 700; cursor: pointer;
+  font-family: 'M PLUS Rounded 1c', sans-serif;
+  touch-action: manipulation;
+}
+.trip-delete-btn.cancel { background: #e0e0e0; color: #666; }
+.trip-delete-btn.del { background: #ff3b30; color: #fff; }
+
 </style>
 </head>
 <body>
 
 <div id="homeView">
   <div class="home-header">マイトリップ</div>
-  <button class="new-trip-btn" onclick="createNewTrip()">＋ 新しい旅行を作成</button>
-  <div class="trip-list" id="tripList"></div>
+    <div class="trip-list" id="tripList"></div>
 </div>
 
 
@@ -717,30 +691,9 @@ body.modal-open{overflow:hidden}
   </div>
 </div>
 
-<!-- 検索バー -->
-<div class="map-search" id="mapSearch">
-  <button class="map-search-icon-btn" id="searchIconBtn" style="font-size:12px;font-weight:bold;">検索</button>
-  <div class="map-search-expand" id="searchExpand">
-    <input type="text" id="searchInput" placeholder="場所を検索…"/>
-  </div>
 </div>
 
-<!-- スタイルピッカー -->
-<div class="style-bar" id="styleBar">
-  <button class="style-chip active" data-style="voyager" onclick="changeMapStyle(this)">Voyager</button>
-  <button class="style-chip" data-style="positron" onclick="changeMapStyle(this)">Positron</button>
-  <button class="style-chip" data-style="dark" onclick="changeMapStyle(this)">Dark</button>
-  <button class="style-chip" data-style="osm" onclick="changeMapStyle(this)">OSM</button>
-  <button class="style-chip" data-style="topo" onclick="changeMapStyle(this)">地形図</button>
-</div>
 
-<!-- マップPiP -->
-<div class="map-pip" id="mapPip">
-  <div id="leafletMap"></div>
-  <button class="pip-pal" id="palBtn" style="font-size:10px;font-weight:bold;">色</button>
-  <div class="map-hint" id="mapHint">タップで拡大</div>
-  <div class="place-hint" id="placeHint"><span>長押しでピンを置く</span><button id="placeCancelBtn" onclick="cancelPinPlacing()" style="margin-left:8px;padding:2px 8px;border:none;background:rgba(0,0,0,.45);color:#fff;border-radius:8px;font-size:10px;font-family:'M PLUS Rounded 1c',sans-serif;cursor:pointer;touch-action:manipulation">✕ キャンセル</button></div>
-</div>
 
 <div class="dur-picker" id="durPicker">
   <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px 8px;border-bottom:.5px solid #f0f0f0">
@@ -802,6 +755,24 @@ window.createNewTrip = () => {
   location.hash = crypto.randomUUID();
   location.reload();
 };
+
+let _deletingTripId = null;
+window.openTripDelete = (id, name) => {
+  _deletingTripId = id;
+  document.getElementById('tripDeleteOverlay').classList.add('show');
+};
+window.closeTripDelete = () => {
+  _deletingTripId = null;
+  document.getElementById('tripDeleteOverlay').classList.remove('show');
+};
+document.getElementById('tripDeleteConfirm').addEventListener('click', () => {
+  if (!_deletingTripId) return;
+  let trips = JSON.parse(localStorage.getItem('my_trips') || '[]');
+  trips = trips.filter(t => t.id !== _deletingTripId);
+  localStorage.setItem('my_trips', JSON.stringify(trips));
+  closeTripDelete();
+  location.reload();
+});
 window.goHome = () => {
   location.hash = 'home';
   location.reload();
@@ -811,6 +782,7 @@ if (isHome) {
   document.getElementById('homeView').classList.add('active');
   document.getElementById('app').style.display = 'none';
   document.getElementById('ptr-indicator').style.display = 'none';
+  document.getElementById('fabNewTrip').classList.add('visible');
   
   const listEl = document.getElementById('tripList');
   savedTrips.sort((a,b) => b.ts - a.ts).forEach(t => {
@@ -818,6 +790,17 @@ if (isHome) {
     a.className = 'trip-item';
     a.href = '#' + t.id;
     a.onclick = () => { setTimeout(() => location.reload(), 10); };
+    
+    // 長押しで削除
+    let _longTimer = null;
+    a.addEventListener('pointerdown', () => {
+      _longTimer = setTimeout(() => {
+        _longTimer = null;
+        openTripDelete(t.id, t.name);
+      }, 700);
+    });
+    a.addEventListener('pointerup', () => { clearTimeout(_longTimer); _longTimer = null; });
+    a.addEventListener('pointercancel', () => { clearTimeout(_longTimer); _longTimer = null; });
     
     const d = new Date(t.ts);
     const dateStr = d.getFullYear() + '/' + (d.getMonth()+1) + '/' + d.getDate() + ' ' + d.getHours() + ':' + d.getMinutes().toString().padStart(2,'0');
@@ -853,22 +836,6 @@ let dragSrc=null;
 let durPickerIdx=null,timePopupIdx=null,tpFixed=false,durLocked=false;
 let expandedCheckImgState = {}; // 🖼️ チェックリスト写真の開閉状態を確実に保持するためのグローバル変数
 
-// ── マップ関連 ──
-const PIN_COLORS=['#e74c3c','#3b82f6','#f59e0b','#10b981','#8b5cf6','#ec4899'];
-const MAP_TILES={
-  voyager: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
-  positron:'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
-  dark:    'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
-  osm:     'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-  topo:    'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
-};
-const MAP_DEFAULT_CENTER=[35.685,139.752];
-const PIP_STATES=[
-  {cls:'',       hint:'タップで拡大',     zoom:11},
-  {cls:'size-1', hint:'もう一度で全画面', zoom:11},
-  {cls:'size-2', hint:'タップで最小化', zoom:11},
-];
-let lMap=null, currentTile=null, mapMarkers={};
 let mapPipState=0, mapPlacingIdx=null, mapPickerOpen=false, mapActiveEvIdx=null;
 
 function mkEvent(name,fixedTime,dur){return{id:nextId++,name,fixedTime,dur,durLocked:false,checks:[],open:false};}
@@ -2932,50 +2899,7 @@ function renderTimelineInto(tl, evs, dayIdx){
     nameIn.addEventListener('mousedown',ev=>ev.stopPropagation());
     nameIn.addEventListener('touchstart',ev=>ev.stopPropagation(),{passive:true});
 
-    // 📍ボタン（SVGピン）
-    const pinBtn=document.createElement('button');
-    pinBtn.className='map-pin-btn';
-    const hasPinAlready=!!(e.pin&&e.pin.lat);
-    pinBtn.title=hasPinAlready?'ピンを移動 / 長押しで解除':'ピンを設置';
-    pinBtn.innerHTML=makePinSvg(hasPinAlready?pinColor:'#ccc',hasPinAlready?18:14);
-    if(isMainPane){
-      (function(idx,col){
-        pinBtn.addEventListener('click',ev=>{
-          ev.stopPropagation();
-          // すでに選択中なら→キャンセル
-          if(mapPlacingIdx===idx && _placingPinBtn===pinBtn){
-            exitMapPlacingMode();
-            return;
-          }
-          // ピン選択開始
-          setPinBtnSelecting(pinBtn);
-          enterMapPlacingMode(idx,col);
-        });
-        // 長押し（1秒）でピン解除
-        let pinLongTimer=null;
-        pinBtn.addEventListener('pointerdown',ev=>{
-          if(!(days[curDay]?.events[idx]?.pin)) return;
-          pinLongTimer=setTimeout(()=>{
-            pinLongTimer=null;
-            exitMapPlacingMode();
-            const ev2=days[curDay]?.events[idx];
-            if(!ev2)return;
-            ev2.pin=null;
-            if(mapMarkers[idx]){lMap.removeLayer(mapMarkers[idx]);delete mapMarkers[idx];}
-            pinBtn.innerHTML=makePinSvg('#ccc',14);
-            pinBtn.title='ピンを設置';
-            const hw=document.querySelectorAll('#timelineArea .ev-wrap');
-            if(hw[idx]){const h=hw[idx].querySelector('.drag-handle');if(h)h.style.background='#c8c8c8';}
-            if(navigator.vibrate)navigator.vibrate([30,20,60]);
-            showToast('📍 ピンを解除しました');
-            saveToFirestore();
-          },900);
-        });
-        pinBtn.addEventListener('pointerup',()=>{if(pinLongTimer){clearTimeout(pinLongTimer);pinLongTimer=null;}});
-        pinBtn.addEventListener('pointercancel',()=>{if(pinLongTimer){clearTimeout(pinLongTimer);pinLongTimer=null;}});
-      })(i,pinColor);
-    }
-
+    
     // listBtn と delBtn を状態で切り替え
     const listBtn=document.createElement('button');listBtn.id='lt-'+paneId+'-'+i;
     listBtn.className='list-toggle'+(e.open?' open':'');listBtn.textContent=e.open?'−':'≡';
@@ -3172,5 +3096,18 @@ document.addEventListener('contextmenu',e=>{
   },{passive:true});
 })();
 </script>
+
+<button class="fab-new-trip" id="fabNewTrip" onclick="createNewTrip()">+</button>
+
+<!-- 旅行削除確認 -->
+<div class="trip-delete-overlay" id="tripDeleteOverlay">
+  <div class="trip-delete-box">
+    <div class="trip-delete-title">この旅行をリストから削除しますか？</div>
+    <div class="trip-delete-btns">
+      <button class="trip-delete-btn cancel" onclick="closeTripDelete()">キャンセル</button>
+      <button class="trip-delete-btn del" id="tripDeleteConfirm">削除</button>
+    </div>
+  </div>
+</div>
 </body>
 </html>
