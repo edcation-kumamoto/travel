@@ -748,6 +748,25 @@ if (!savedTrips.find(t => t.id === SAFE_TRIP_ID)) {
   localStorage.setItem('my_trips', JSON.stringify(savedTrips));
 }
 
+
+// 地図削除に伴うダミー変数（ReferenceError防止用）
+let lMap = null;
+let mapMarkers = {};
+let mapPipState = 0;
+let mapPlacingIdx = null;
+let currentTile = null;
+let mapPickerOpen = false;
+let mapActiveEvIdx = null;
+const MAP_TILES = {};
+const PIP_STATES = [];
+const PIN_COLORS = [];
+function addMapMarker(){}
+function makePinSvg(){ return ''; }
+function initMapPip(){}
+function initMapSearch(){}
+function initMapIfNeeded(){}
+function changeMapStyle(){}
+
 let tripId = location.hash.slice(1);
 const isHome = !tripId || tripId === 'home';
 
@@ -923,7 +942,7 @@ function applyRemoteSnap(snap){
     days.forEach(d=>d.events.forEach(e=>{if(e.id>=nextId)nextId=e.id+1;}));
     curDay = Math.min(curDay, Math.max(0, days.length-1));
     renderHeader();renderTimeline();
-    initMapIfNeeded(); // ← マップ初期化
+    
     return;
   }
 
@@ -986,7 +1005,7 @@ onSnapshot(doc(db,'trips',tripId), snap => {
     }];
     renderHeader();renderTimeline();
     saveToFirestore();
-    initMapIfNeeded(); // ← マップ初期化
+    
     return;
   }
 
@@ -2129,7 +2148,7 @@ function renderChecklist(evs,evIdx,paneId){
         // すでに選択中ならキャンセル
         if(_placingPinBtn===btn){exitMapPlacingMode();return;}
         // 地図未初期化ならマップを開く
-        if(!lMap){initMapIfNeeded();}
+        
         setPinBtnSelecting(btn);
         // チェックアイテム用として enterMapPlacingMode
         enterMapPlacingMode(evIdx, col, {
@@ -2379,363 +2398,6 @@ function makePinSvg(color,size){
   </svg>`;
 }
 
-function initMapIfNeeded(){
-  // Leaflet が未ロードなら動的にロード
-  if(typeof L==='undefined'){
-    const s=document.createElement('script');
-    s.src='https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js';
-    s.onload=initLeafletMap;
-    s.onerror=()=>console.warn('Leaflet読み込み失敗');
-    document.head.appendChild(s);
-  } else {
-    initLeafletMap();
-  }
-}
-
-function initLeafletMap(){
-  if(lMap) return; // 二重初期化防止
-
-  // localStorageから前回位置を復元
-  let initC=MAP_DEFAULT_CENTER, initZ=11;
-  try{
-    const saved=JSON.parse(localStorage.getItem('mapPos'));
-    if(saved){initC=[saved.lat,saved.lng];initZ=saved.zoom;}
-  }catch(e){}
-
-  lMap=L.map('leafletMap',{center:initC,zoom:initZ,zoomControl:false,attributionControl:true});
-  currentTile=L.tileLayer(MAP_TILES.voyager,{maxZoom:22,subdomains:'abcd'}).addTo(lMap);
-  setTimeout(()=>lMap.invalidateSize(),120);
-
-  // 移動のたびにlocalStorageへ保存
-  lMap.on('moveend zoomend',()=>{
-    try{
-      const c=lMap.getCenter();
-      localStorage.setItem('mapPos',JSON.stringify({lat:c.lat,lng:c.lng,zoom:lMap.getZoom()}));
-    }catch(e){}
-  });
-
-  // ── 地図長押し → ピン設置（ドラッグで微調整） ──
-  let _mapLongTimer=null;
-  let _mapDraggingPin=false;
-  let _mapTempMarker=null;
-
-  function _removeTempMarker(){
-    if(_mapTempMarker){lMap.removeLayer(_mapTempMarker);_mapTempMarker=null;}
-  }
-
-  function _placePinAt(latlng){
-    const idx=mapPlacingIdx;
-    if(idx===null)return;
-
-    if(_placingIsCheck && _placingCheckRef){
-      // チェックアイテム用
-      _placingCheckRef.pin={lat:latlng.lat,lng:latlng.lng};
-      if(_placingCheckOnPlace) _placingCheckOnPlace(latlng);
-    } else {
-      const ev=days[curDay]?.events[idx];
-      if(!ev)return;
-      ev.pin={lat:latlng.lat,lng:latlng.lng};
-      addMapMarker(idx,latlng.lat,latlng.lng);
-      // 📍ボタン＋ドラッグハンドル更新
-      const color=PIN_COLORS[idx%PIN_COLORS.length];
-      const evWraps=document.querySelectorAll('#timelineArea .ev-wrap');
-      if(evWraps[idx]){
-        const pb=evWraps[idx].querySelector('.map-pin-btn');
-        if(pb){pb.innerHTML=makePinSvg(color,18);pb.title='長押しで解除';}
-        const hd=evWraps[idx].querySelector('.drag-handle');
-        if(hd) hd.style.background=color;
-      }
-    }
-    _removeTempMarker();
-    exitMapPlacingMode(true);
-    if(navigator.vibrate) navigator.vibrate([30,20,60]);
-    saveToFirestore();
-  }
-
-  // タッチ長押し検出 → 500ms長押しで即ピン確定（iOSでdragendが来ないためシンプル方式）
-  lMap.on('mousedown touchstart',e=>{
-    if(mapPlacingIdx===null) return;
-    clearTimeout(_mapLongTimer);
-    _mapDraggingPin=false;
-    const latlng=e.latlng;
-    _mapLongTimer=setTimeout(()=>{
-      _mapLongTimer=null;
-      if(navigator.vibrate) navigator.vibrate(50);
-      _placePinAt(latlng);
-    },600);
-  });
-
-  lMap.on('mouseup touchend',e=>{
-    clearTimeout(_mapLongTimer);
-    _mapLongTimer=null;
-    _mapDraggingPin=false;
-  });
-
-  lMap.on('mousemove touchmove',e=>{
-    // 長押し中に指が動いたらキャンセル（誤設置防止）
-    if(_mapLongTimer){clearTimeout(_mapLongTimer);_mapLongTimer=null;}
-  });
-
-  // クリック（短押し）はピン設置モード中は何もしない（誤設置防止）
-  lMap.on('click',e=>{
-    if(mapPlacingIdx===null) return;
-  });
-
-  // 既存ピンを配置
-  const evs=getEvents();
-  evs.forEach((ev,i)=>{if(ev.pin)addMapMarker(i,ev.pin.lat,ev.pin.lng);});
-
-  initMapPip();
-  initMapSearch();
-}
-
-function addMapMarker(evIdx,lat,lng){
-  if(mapMarkers[evIdx])lMap.removeLayer(mapMarkers[evIdx]);
-  const color=PIN_COLORS[evIdx%PIN_COLORS.length];
-  const icon=L.divIcon({
-    className:'lf-pin-'+evIdx,
-    html:`<div style="width:22px;height:22px;background:${color};border:2.5px solid #fff;border-radius:50% 50% 50% 0;transform:rotate(-45deg);box-shadow:0 2px 8px rgba(0,0,0,.4)"></div>`,
-    iconSize:[22,22],iconAnchor:[11,22],popupAnchor:[0,-24],
-  });
-  const m=L.marker([lat,lng],{icon}).addTo(lMap);
-  const evs=getEvents();
-  m.bindPopup(
-    `<div style="font-family:'M PLUS Rounded 1c',sans-serif;white-space:nowrap">
-      <span style="display:inline-block;width:8px;height:8px;background:${color};border-radius:50%;margin-right:5px;vertical-align:middle"></span>
-      ${evs[evIdx]?.name||''}
-    </div>`,
-    {closeButton:false,maxWidth:220}
-  );
-  m.on('click',()=>onMapPinClick(evIdx));
-  mapMarkers[evIdx]=m;
-}
-
-function activateMapPin(evIdx){
-  const color=PIN_COLORS[evIdx%PIN_COLORS.length];
-  if(mapMarkers[evIdx]){
-    const aIcon=L.divIcon({
-      className:'lf-pin-'+evIdx,
-      html:`<div style="width:26px;height:26px;background:#fff;border:3.5px solid ${color};border-radius:50% 50% 50% 0;transform:rotate(-45deg);box-shadow:0 2px 10px rgba(0,0,0,.5)"></div>`,
-      iconSize:[26,26],iconAnchor:[13,26],popupAnchor:[0,-28],
-    });
-    mapMarkers[evIdx].setIcon(aIcon);
-  }
-  const evs=getEvents();
-  evs[evIdx].open=true;
-  const cl=document.getElementById('cl-main-'+evIdx);
-  const btn=document.getElementById('lt-main-'+evIdx);
-  if(cl)cl.className='checklist open';
-  if(btn){btn.className='list-toggle open';btn.textContent='−';}
-  // スクロール
-  const wrapEls=document.querySelectorAll('#timelineArea .ev-wrap');
-  if(wrapEls[evIdx])wrapEls[evIdx].scrollIntoView({behavior:'smooth',block:'center'});
-  // flyTo
-  const pin=evs[evIdx]?.pin;
-  if(pin&&lMap){
-    if(mapPipState===0){mapPipState=2;applyMapPipState();}
-    setTimeout(()=>{
-      lMap.flyTo([pin.lat,pin.lng],17,{duration:1});
-      setTimeout(()=>{if(mapMarkers[evIdx])mapMarkers[evIdx].openPopup();},1100);
-    },mapPipState>0?0:450);
-  }
-  mapActiveEvIdx=evIdx;
-}
-
-function deactivateMapPin(evIdx){
-  const color=PIN_COLORS[evIdx%PIN_COLORS.length];
-  if(mapMarkers[evIdx]){
-    const nIcon=L.divIcon({
-      className:'lf-pin-'+evIdx,
-      html:`<div style="width:22px;height:22px;background:${color};border:2.5px solid #fff;border-radius:50% 50% 50% 0;transform:rotate(-45deg);box-shadow:0 2px 8px rgba(0,0,0,.4)"></div>`,
-      iconSize:[22,22],iconAnchor:[11,22],popupAnchor:[0,-24],
-    });
-    mapMarkers[evIdx].setIcon(nIcon);
-    if(mapMarkers[evIdx].isPopupOpen())mapMarkers[evIdx].closePopup();
-  }
-  const evs=getEvents();
-  evs[evIdx].open=false;
-  const cl=document.getElementById('cl-main-'+evIdx);
-  const btn=document.getElementById('lt-main-'+evIdx);
-  if(cl)cl.className='checklist';
-  if(btn){btn.className='list-toggle';btn.textContent='≡';}
-  mapActiveEvIdx=null;
-}
-
-function onMapPinClick(evIdx){
-  if(mapActiveEvIdx===evIdx){
-    deactivateMapPin(evIdx);
-  } else {
-    if(mapActiveEvIdx!==null)deactivateMapPin(mapActiveEvIdx);
-    activateMapPin(evIdx);
-  }
-}
-
-// ピン設置モードの管理
-let _placingPinBtn=null; // 現在選択中のピンボタン要素
-let _placingColor=null;  // 選択中の色
-let _placingIsCheck=false; // チェックアイテム用か
-let _placingCheckRef=null; // チェックアイテムの参照
-let _placingCheckOnPlace=null; // 設置完了時コールバック
-
-// ボタン点滅アニメCSS（一度だけ挿入）
-(function(){
-  const s=document.createElement('style');
-  s.textContent=`@keyframes pinBtnPulse{0%,100%{transform:scale(1);filter:brightness(1)}50%{transform:scale(1.3);filter:brightness(1.4)}} .pin-selecting{animation:pinBtnPulse .7s ease-in-out infinite!important}`;
-  document.head.appendChild(s);
-})();
-
-function enterMapPlacingMode(evIdx, color, opts){
-  // opts: {isCheck, checkRef, onPlace} チェックアイテム用オプション
-  mapPlacingIdx=evIdx;
-  _placingColor=color;
-  _placingIsCheck=!!(opts&&opts.isCheck);
-  _placingCheckRef=opts?.checkRef||null;
-  _placingCheckOnPlace=opts?.onPlace||null;
-
-  // 地図を拡大
-  if(mapPipState<1){mapPipState=1; applyMapPipState();}
-
-  setTimeout(()=>{
-    const pip=document.getElementById('mapPip');
-    const ph=document.getElementById('placeHint');
-    const mh=document.getElementById('mapHint');
-    pip.classList.add('placing');
-    if(ph){ph.style.display='flex';}
-    if(mh) mh.style.display='none';
-    const pin=!_placingIsCheck ? getEvents()[evIdx]?.pin : _placingCheckRef?.pin;
-    if(pin&&lMap) lMap.flyTo([pin.lat,pin.lng],17,{duration:.8});
-  },mapPipState>0?50:430);
-}
-
-function exitMapPlacingMode(keepOpen){
-  mapPlacingIdx=null;
-  _placingIsCheck=false;
-  _placingCheckRef=null;
-  _placingCheckOnPlace=null;
-  _placingColor=null;
-  if(_placingPinBtn){_placingPinBtn.classList.remove('pin-selecting');_placingPinBtn=null;}
-  const pip=document.getElementById('mapPip');
-  const ph=document.getElementById('placeHint');
-  const mh=document.getElementById('mapHint');
-  if(pip) pip.classList.remove('placing');
-  if(ph) ph.style.display='none';
-  if(mh) mh.style.display='block';
-  // keepOpen=trueのとき（ピン設置成功）は地図サイズそのまま、それ以外はsize-0に戻す
-  if(!keepOpen && mapPipState>0){mapPipState=0;applyMapPipState();}
-}
-
-// キャンセルボタン用グローバル関数
-window.cancelPinPlacing=function(){
-  exitMapPlacingMode();
-};
-
-// ピンボタンを「選択状態」にする
-function setPinBtnSelecting(btn){
-  if(_placingPinBtn&&_placingPinBtn!==btn) _placingPinBtn.classList.remove('pin-selecting');
-  _placingPinBtn=btn;
-  if(btn) btn.classList.add('pin-selecting');
-}
-
-function changeMapStyle(btn){
-  document.querySelectorAll('.style-chip').forEach(b=>b.classList.remove('active'));
-  btn.classList.add('active');
-  if(lMap&&currentTile){
-    lMap.removeLayer(currentTile);
-    currentTile=L.tileLayer(MAP_TILES[btn.dataset.style],{maxZoom:22,subdomains:'abcd'}).addTo(lMap);
-  }
-}
-// グローバルに公開（onclick属性から呼ぶため）
-window.changeMapStyle=changeMapStyle;
-
-function applyMapPipState(){
-  const pip=document.getElementById('mapPip');
-  const hint=document.getElementById('mapHint');
-  const s=PIP_STATES[mapPipState];
-  pip.classList.remove('size-1','size-2');
-  if(s.cls)pip.classList.add(s.cls);
-  if(hint)hint.textContent=s.hint;
-  if(mapPipState===0){
-    mapPickerOpen=false;
-    document.getElementById('styleBar').classList.remove('show');
-  }
-  const srch=document.getElementById('mapSearch');
-  if(srch){
-    srch.classList.toggle('show',mapPipState>0);
-    // size-2(最大)時: 検索バーをマップの下端（bottom: calc(50vh + 20px + 8px)）に
-    if(mapPipState===2){
-      srch.style.bottom='calc(95vh + 30px)';
-    } else {
-      srch.style.bottom='108px';
-    }
-  }
-  setTimeout(()=>{
-    if(lMap){
-      lMap.invalidateSize();
-    }
-  },420);
-}
-
-function initMapPip(){
-  const pip=document.getElementById('mapPip');
-  const palBtn=document.getElementById('palBtn');
-  const styleBar=document.getElementById('styleBar');
-  if(!pip||!palBtn) return;
-
-  // マップにタッチ中は背後のページスクロールを防ぐ
-  // ※ touchstartはLeafletに通す（stopPropagationしない）
-  // 水平スワイプ（日付移動）は許可し、垂直スクロールのみ防止
-  let mapTouchStart = null;
-  pip.addEventListener('touchstart',e=>{
-    if(mapPipState>0){
-      mapTouchStart = {x: e.touches[0].clientX, y: e.touches[0].clientY};
-    }
-  },{passive:true});
-  
-  pip.addEventListener('touchmove',e=>{
-    if(mapPipState>0 && mapTouchStart){
-      const dx = Math.abs(e.touches[0].clientX - mapTouchStart.x);
-      const dy = Math.abs(e.touches[0].clientY - mapTouchStart.y);
-      // 水平方向の移動が大きい場合（日付スワイプ）は preventDefault しない
-      // 垂直方向の移動が大きい場合（地図スクロール）のみ preventDefault
-      if(dy > dx * 1.5){
-        e.preventDefault();
-      }
-    }
-  },{passive:false});
-  
-  pip.addEventListener('touchend',()=>{
-    mapTouchStart = null;
-  },{passive:true});
-
-  let ptStart=null;
-
-  pip.addEventListener('pointerdown',e=>{
-    if(e.target===palBtn||e.target.closest('.pip-pal'))return;
-    ptStart={x:e.clientX,y:e.clientY};
-  });
-  pip.addEventListener('pointerup',e=>{
-    if(!ptStart)return;
-    const dist=Math.hypot(e.clientX-ptStart.x,e.clientY-ptStart.y);
-    if(dist<8&&mapPlacingIdx===null){
-      mapPipState=(mapPipState+1)%PIP_STATES.length;
-      applyMapPipState();
-    }
-    ptStart=null;
-  });
-  palBtn.addEventListener('click',e=>{
-    e.stopPropagation();
-    if(mapPipState===0)return;
-    mapPickerOpen=!mapPickerOpen;
-    styleBar.classList.toggle('show',mapPickerOpen);
-  });
-  document.addEventListener('click',e=>{
-    if(!pip.contains(e.target)&&!styleBar.contains(e.target)){
-      mapPickerOpen=false;styleBar.classList.remove('show');
-    }
-  });
-}
-
-function initMapSearch(){
   const inp=document.getElementById('searchInput');
   const iconBtn=document.getElementById('searchIconBtn');
   const srch=document.getElementById('mapSearch');
