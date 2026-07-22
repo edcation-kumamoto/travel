@@ -8,7 +8,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<!-- v20260722-13 -->
+<!-- v20260722-14 -->
 <title>旅のしおり</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -764,7 +764,7 @@ window.addEventListener('unhandledrejection', function(event) {
 });
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getFirestore, doc, setDoc, onSnapshot, deleteDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDMQAwcnkgQcwQl1gDiuMRqybw0zNFjVMw",
@@ -935,7 +935,7 @@ function withScrollGuard(fn){
   });
 }
 
-function saveToFirestore(){
+function saveToFirestore(immediate = false){
   localChangePending = true;
   clearTimeout(saveTimer);
   const currentName = document.getElementById('tripName').value;
@@ -954,7 +954,8 @@ function saveToFirestore(){
     t.ts = Date.now();
     localStorage.setItem('my_trips', JSON.stringify(trips));
   }
-  saveTimer = setTimeout(async () => {
+  
+  const doSave = async () => {
     try{
       await setDoc(doc(db,'trips',tripId), snapshot);
     } catch(err){
@@ -967,7 +968,13 @@ function saveToFirestore(){
       const s = queuedSnap; queuedSnap = null;
       applyRemoteSnap(s);
     }
-  }, 300);
+  };
+
+  if (immediate) {
+    return doSave();
+  } else {
+    saveTimer = setTimeout(doSave, 300);
+  }
 }
 
 function showToast(msg){
@@ -1042,16 +1049,9 @@ onSnapshot(doc(db,'trips',tripId), snap => {
       initialLoadDone = true;
       isLoadingInitialData = false;
       days=[{
-        date:'10/10',
+        date: (new Date().getMonth()+1) + '/' + new Date().getDate(),
         events:[
-          mkEvent('玉名出発','07:00',70),
-          mkEvent('駐車場',null,70),
-          mkEvent('空港・ラウンジ休憩',null,35),
-          mkEvent('飛行機チェックイン',null,60),
-          mkEvent('熊本発','06:35',105),
-          mkEvent('羽田着',null,35),
-          mkEvent('電車移動',null,0),
-          mkEvent('ホテル着',null,null),
+          mkEvent('新しいイベント',null,60)
         ]
       }];
       renderHeader();renderTimeline();
@@ -2599,11 +2599,21 @@ function renderTimelineInto(tl, evs, dayIdx){
       // 常に所要時間ピッカーを開けるようにする（固定時刻間でも編集可能）
       btn.addEventListener('click',ev=>{ev.stopPropagation();openDurPicker(i,btn);});
 
-      // ＋ボタン（長押し後出現、ドラッグして挿入）
+      // ＋ボタン（編集モード時に出現）
       const addBtn=document.createElement('button');
       addBtn.className='conn-add-btn';
       addBtn.textContent='＋';
       addBtn.dataset.insertIdx=String(i+1);
+      addBtn.addEventListener('click', ev => {
+        ev.stopPropagation();
+        days[curDay].events.splice(i+1, 0, mkEvent('新しいイベント',null,60));
+        renderTimeline();
+        saveToFirestore();
+        setTimeout(()=>{
+          const ns=document.querySelectorAll('.ev-name');
+          if(ns[i+1]){ ns[i+1].focus(); ns[i+1].select(); }
+        },50);
+      });
       cR.appendChild(btn);cR.appendChild(addBtn);
       conn.appendChild(cL);conn.appendChild(cR);tl.appendChild(conn);
     }
