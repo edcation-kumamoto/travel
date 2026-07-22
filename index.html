@@ -8,7 +8,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<!-- v20260722-8 -->
+<!-- v20260722-9 -->
 <title>旅のしおり</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -2605,34 +2605,7 @@ window.addEventListener('pagehide', ()=>{
   }
 });
 
-document.getElementById('copyUrlBtn').addEventListener('click', (e) => {
-  e.preventDefault();
-  const url = location.href;
-  if (navigator.clipboard && window.isSecureContext) {
-    navigator.clipboard.writeText(url).then(() => {
-      alert('URLをコピーしました！メモ帳に貼り付けてください。\n\n' + url);
-    }).catch(err => {
-      alert('コピーに失敗しました。手動でコピーしてください:\n\n' + url);
-    });
-  } else {
-    // 古いiOSや非SSL環境向けのフォールバック
-    const textArea = document.createElement("textarea");
-    textArea.value = url;
-    textArea.style.position = "fixed";
-    textArea.style.left = "-999999px";
-    textArea.style.top = "-999999px";
-    document.body.appendChild(textArea);
-    textArea.focus();
-    textArea.select();
-    try {
-      document.execCommand('copy');
-      alert('URLをコピーしました！メモ帳に貼り付けてください。\n\n' + url);
-    } catch (err) {
-      alert('コピーに失敗しました。手動でコピーしてください:\n\n' + url);
-    }
-    textArea.remove();
-  }
-});
+
 
 // iOSの長押しメニューを入力欄以外で完全無効化
 document.addEventListener('contextmenu',e=>{
