@@ -567,7 +567,7 @@ body.modal-open{overflow:hidden}
 .trip-item:active { background: #f9f9f9; transform: scale(0.98); }
 .trip-item-name { font-size: 16px; font-weight: 700; color: #333; }
 .trip-item-date { font-size: 12px; color: #888; margin-top: 4px; }
-.back-home-btn { background: rgba(255,255,255,0.2); border: none; color: #fff; padding: 4px 10px; border-radius: 12px; font-size: 12px; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; position: absolute; left: 14px; top: 12px; touch-action: manipulation; z-index: 10; }
+.back-home-btn { background: rgba(255,255,255,0.2); border: none; color: #fff; padding: 4px 10px; border-radius: 12px; font-size: 12px; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; touch-action: manipulation; z-index: 10; margin-right: 4px; }
 
 
 /* ── 新規旅行作成FAB ── */
@@ -647,12 +647,11 @@ body.modal-open{overflow:hidden}
 </div>
 <div class="app" id="app">
   <div class="app-head" id="appHead">
-    <button class="back-home-btn" onclick="goHome()">戻る</button>
     <div class="trip-name-row collapsible" style="position:relative;">
       <input class="trip-name" id="tripName" value="旅のしおり" placeholder="旅行名">
-      <button id="copyUrlBtn" style="position:absolute; right:10px; background:rgba(255,255,255,0.2); border:none; color:#fff; padding:6px 10px; border-radius:12px; font-size:11px; cursor:pointer; font-weight:bold; touch-action:manipulation;">URLコピー</button>
     </div>
     <div class="date-nav">
+      <button class="back-home-btn" onclick="goHome()">戻る</button>
       <button class="nav-btn" id="prevDay">‹</button>
       <div class="date-center">
         <div class="date-display" id="dateDisplay">—</div>
