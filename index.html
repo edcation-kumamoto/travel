@@ -2178,7 +2178,7 @@ function renderChecklist(evs,evIdx,paneId){
     const inp=document.createElement('input');
     inp.className='check-text'+(c.done?' done':'');
     inp.value=c.text;
-    if (isAppLocked) inp.setAttribute('readonly', 'true');
+
     inp.dataset.role='check-text';
     inp.dataset.evIdx=evIdx;
     inp.dataset.dayIdx=curDay;
