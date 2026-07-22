@@ -1154,6 +1154,7 @@ function applyRemoteSnap(snap){
       const selEnd = activeEl.selectionEnd;
       const restored = document.querySelector(
         `[data-role="${activeRole}"][data-ev-idx="${activeEvIdx}"][data-day-idx="${activeDayIdx}"][data-check-idx="${activeCheckIdx||''}"]`
+      );
       if(restored){
         restored.value = activeVal;
         restored.focus();
@@ -1176,9 +1177,6 @@ let isLoadingInitialData = true; // 初期ロード中フラグを追加
 
 onSnapshot(doc(db,'trips',tripId), snap => {
   try {
-    // 自分が保存したものなら無視
-    if(snap.data() && snap.data()._savedBy === clientId) return;
-
     if(!snap.exists()){
       if(initialLoadDone) return;
       initialLoadDone = true;
@@ -1194,6 +1192,7 @@ onSnapshot(doc(db,'trips',tripId), snap => {
       return;
     }
 
+    // 自分が保存したものなら無視
     if(snap.data()._savedBy === clientId) return;
 
     if(localChangePending){
