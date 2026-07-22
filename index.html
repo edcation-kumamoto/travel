@@ -65,7 +65,6 @@ body::before{
   border-radius:0 0 26px 26px;
   position:sticky;top:0;z-index:100;
   box-shadow:0 4px 20px rgba(20,80,76,.35),0 1px 0 rgba(255,255,255,.08) inset;
-  overflow:hidden;
   transition:padding .32s cubic-bezier(.4,0,.2,1), border-radius .32s cubic-bezier(.4,0,.2,1);
 }
 
@@ -99,7 +98,7 @@ body::before{
 .app-head.compact .date-dots-wrap.collapsible{max-height:0;opacity:0;margin-top:0;}
 
 /* 旅行名 */
-.trip-name-row{display:flex;align-items:center;justify-content:center}
+.trip-name-row{display:flex;align-items:center;justify-content:space-between;gap:8px;}
 .trip-name{
   font-size:17px;font-weight:900;
   color:#F5C842;
@@ -567,7 +566,7 @@ body.modal-open{overflow:hidden}
 .trip-item:active { background: #f9f9f9; transform: scale(0.98); }
 .trip-item-name { font-size: 16px; font-weight: 700; color: #333; }
 .trip-item-date { font-size: 12px; color: #888; margin-top: 4px; }
-.back-home-btn { background: rgba(255,255,255,0.2); border: none; color: #fff; padding: 4px 8px; border-radius: 12px; font-size: 11px; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; touch-action: manipulation; z-index: 10; }
+.back-home-btn { background: rgba(255,255,255,0.2); border: none; color: #fff; padding: 6px 10px; border-radius: 12px; font-size: 12px; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; touch-action: manipulation; min-height: 36px; min-width: 52px; flex-shrink: 0; }
 
 
 /* ── 新規旅行作成FAB ── */
@@ -647,9 +646,10 @@ body.modal-open{overflow:hidden}
 </div>
 <div class="app" id="app">
   <div class="app-head" id="appHead">
-    <div class="trip-name-row collapsible" style="position:relative;">
-      <button class="back-home-btn" onclick="goHome()" style="position:absolute; left:0; top:50%; transform:translateY(-50%); margin:0;">‹ 戻る</button>
+    <div class="trip-name-row collapsible">
+      <button class="back-home-btn" onclick="goHome()">‹ 戻る</button>
       <input class="trip-name" id="tripName" value="旅のしおり" placeholder="旅行名">
+      <div style="width:52px"></div>
     </div>
     <div class="date-nav">
       <button class="nav-btn" id="prevDay">‹</button>
@@ -726,9 +726,11 @@ body.modal-open{overflow:hidden}
 
 <script type="module">
 window.onerror = function(msg, url, lineNo, columnNo, error) {
+  // 内部的なSTOPエラーは無視
+  if(msg && msg.includes('STOP_EXECUTION')) return true;
   const errDiv = document.createElement('div');
   errDiv.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(255,0,0,0.9);color:white;padding:20px;z-index:999999;border-radius:10px;font-family:sans-serif;max-width:90%;word-break:break-all;';
-  errDiv.innerHTML = '<b>Error!</b><br>' + msg + '<br>Line: ' + lineNo + '<br>Col: ' + columnNo + '<br>' + (error ? error.stack : '');
+  errDiv.innerHTML = '<b>JS Error!</b><br>' + msg + '<br>Line: ' + lineNo + '<br>Col: ' + columnNo + '<br>' + (error ? error.stack : '');
   document.body.appendChild(errDiv);
   return false;
 };
@@ -854,7 +856,7 @@ if (isHome) {
     listEl.appendChild(a);
   });
   
-  // これ以降の初期化処理をスキップするためのハック
+  // これ以降の初期化処理をスキップ（意図的なthrow）
   throw new Error('STOP_EXECUTION_FOR_HOME_VIEW');
 } else {
   const existing = savedTrips.find(t => t.id === tripId);
@@ -875,7 +877,7 @@ let dragSrc=null;
 let durPickerIdx=null,timePopupIdx=null,tpFixed=false,durLocked=false;
 let expandedCheckImgState = {}; // 🖼️ チェックリスト写真の開閉状態を確実に保持するためのグローバル変数
 
-let mapPipState=0, mapPlacingIdx=null, mapPickerOpen=false, mapActiveEvIdx=null;
+// mapPipState等は上部で定義済み
 
 function mkEvent(name,fixedTime,dur){return{id:nextId++,name,fixedTime,dur,durLocked:false,checks:[],open:false};}
 
@@ -2162,34 +2164,9 @@ function renderChecklist(evs,evIdx,paneId){
       });
       btn.addEventListener('pointerup',()=>{if(cPinLong){clearTimeout(cPinLong);cPinLong=null;}});
       btn.addEventListener('pointercancel',()=>{if(cPinLong){clearTimeout(cPinLong);cPinLong=null;}});
-      // タップ → 選択開始 or キャンセル
+      // タップ → 地図機能削除のため何もしない
       btn.addEventListener('click',ev=>{
         ev.stopPropagation();
-        // すでに選択中ならキャンセル
-        if(_placingPinBtn===btn){exitMapPlacingMode();return;}
-        // 地図未初期化ならマップを開く
-        
-        setPinBtnSelecting(btn);
-        // チェックアイテム用として enterMapPlacingMode
-        enterMapPlacingMode(evIdx, col, {
-          isCheck: true,
-          checkRef: c_ref,
-          onPlace: (latlng)=>{
-            // マーカー追加
-            const icon2=L.divIcon({
-              className:'lf-cpin-'+evIdx+'-'+cidx,
-              html:`<div style="width:16px;height:16px;background:${col};border:2px solid #fff;border-radius:50%;box-shadow:0 2px 6px rgba(0,0,0,.4)"></div>`,
-              iconSize:[16,16],iconAnchor:[8,8],popupAnchor:[0,-10],
-            });
-            const cm=L.marker([latlng.lat,latlng.lng],{icon:icon2}).addTo(lMap);
-            cm.bindPopup(`<div style="font-family:'M PLUS Rounded 1c',sans-serif;white-space:nowrap;font-size:11px"><span style="display:inline-block;width:7px;height:7px;background:${col};border-radius:50%;margin-right:4px;vertical-align:middle"></span>${c_ref.text||''}</div>`,{closeButton:false});
-            const oldKey='c-'+evIdx+'-'+cidx;
-            if(mapMarkers[oldKey]&&lMap){lMap.removeLayer(mapMarkers[oldKey]);}
-            mapMarkers[oldKey]=cm;
-            btn.innerHTML=makePinSvg(col,14);
-            btn.title='長押しで解除';
-          }
-        });
       });
     })(c, ci, cPinColor, cPinBtn);
 
@@ -2452,7 +2429,7 @@ function makePinSvg(color,size){
     .then(data=>{
       iconBtn.textContent='🔍';
       if(data&&data.length>0){
-        lMap.flyTo([parseFloat(data[0].lat),parseFloat(data[0].lon)],15,{duration:1.2});
+        if(lMap) lMap.flyTo([parseFloat(data[0].lat),parseFloat(data[0].lon)],15,{duration:1.2});
         srch.classList.remove('expanded');
         inp.value='';
       } else {
@@ -2466,31 +2443,7 @@ function makePinSvg(color,size){
 
 // renderTimeline後にマーカーを再同期する
 function syncMapMarkers(){
-  if(!lMap)return;
-  // 既存マーカーを全削除
-  Object.values(mapMarkers).forEach(m=>lMap.removeLayer(m));
-  mapMarkers={};
-  mapActiveEvIdx=null;
-  const evs=getEvents();
-  evs.forEach((ev,i)=>{
-    if(ev.pin) addMapMarker(i,ev.pin.lat,ev.pin.lng);
-    // チェックアイテムのピンも再同期
-    if(ev.checks){
-      ev.checks.forEach((c,ci)=>{
-        if(c.pin&&c.pin.lat){
-          const col=PIN_COLORS[(i*10+ci)%PIN_COLORS.length];
-          const icon2=L.divIcon({
-            className:'lf-cpin-'+i+'-'+ci,
-            html:`<div style="width:16px;height:16px;background:${col};border:2px solid #fff;border-radius:50%;box-shadow:0 2px 6px rgba(0,0,0,.4)"></div>`,
-            iconSize:[16,16],iconAnchor:[8,8],popupAnchor:[0,-10],
-          });
-          const cm=L.marker([c.pin.lat,c.pin.lng],{icon:icon2}).addTo(lMap);
-          cm.bindPopup(`<div style="font-family:'M PLUS Rounded 1c',sans-serif;white-space:nowrap;font-size:11px"><span style="display:inline-block;width:7px;height:7px;background:${col};border-radius:50%;margin-right:4px;vertical-align:middle"></span>${c.text||''}</div>`,{closeButton:false});
-          mapMarkers['c-'+i+'-'+ci]=cm;
-        }
-      });
-    }
-  });
+  // 地図機能は削除済みのため何もしない
 }
 
 function renderTimeline(){
