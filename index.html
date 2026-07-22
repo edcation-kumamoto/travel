@@ -1074,8 +1074,15 @@ function saveToFirestore(immediate = false){
   }
   
   const doSave = async () => {
+    // 実際に保存する直前の最新の値をキャプチャする
+    const freshSnapshot = {
+      days: JSON.parse(JSON.stringify(days)),
+      tripName: document.getElementById('tripName').value,
+      ts: Date.now(),
+      _savedBy: clientId
+    };
     try{
-      await setDoc(doc(db,'trips',tripId), snapshot);
+      await setDoc(doc(db,'trips',tripId), freshSnapshot);
     } catch(err){
       console.error('save failed', err);
       showToast('⚠️ 保存失敗。ネット接続を確認してください。');
@@ -1147,11 +1154,17 @@ function applyRemoteSnap(snap){
       const selEnd = activeEl.selectionEnd;
       const restored = document.querySelector(
         `[data-role="${activeRole}"][data-ev-idx="${activeEvIdx}"][data-day-idx="${activeDayIdx}"][data-check-idx="${activeCheckIdx||''}"]`
-      );
       if(restored){
         restored.value = activeVal;
         restored.focus();
         try{ restored.setSelectionRange(selStart, selEnd); } catch(e){}
+        
+        // 復元した入力値をメモリ上のdaysにも反映（これがないと次のsaveで先祖返りして同期がおかしくなる）
+        if (activeRole === 'name' && days[curDay] && days[curDay].events[activeEvIdx]) {
+          days[curDay].events[activeEvIdx].name = activeVal;
+        } else if (activeRole === 'check-text' && days[curDay] && days[curDay].events[activeEvIdx] && days[curDay].events[activeEvIdx].checks[activeCheckIdx]) {
+          days[curDay].events[activeEvIdx].checks[activeCheckIdx].text = activeVal;
+        }
       }
     }
   });
@@ -1163,8 +1176,8 @@ let isLoadingInitialData = true; // 初期ロード中フラグを追加
 
 onSnapshot(doc(db,'trips',tripId), snap => {
   try {
-    // hasPendingWrites=true はローカル書き込みの即時エコー → 無視
-    if(snap.metadata.hasPendingWrites) return;
+    // 自分が保存したものなら無視
+    if(snap.data() && snap.data()._savedBy === clientId) return;
 
     if(!snap.exists()){
       if(initialLoadDone) return;
